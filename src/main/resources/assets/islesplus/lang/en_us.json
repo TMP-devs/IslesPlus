@@ -1,0 +1,10 @@
+{
+  "key.categories.islesplus": "Isles+",
+  "key.category.islesplus:a_islesplus": "Isles+",
+  "key.category.islesplus.a_islesplus": "Isles+",
+  "key.islesplus.lock_slot": "Lock Slot",
+  "key.islesplus.confirm_inventory_full": "Inventory Confirm",
+  "key.islesplus.backpack": "Open Backpack (/bp)",
+  "key.islesplus.trash": "Open Trash (/trash)",
+  "key.islesplus.resource_vault": "Open Resource Vault"
+}

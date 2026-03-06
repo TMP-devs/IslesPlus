@@ -1,0 +1,37 @@
+{
+	"schemaVersion": 1,
+	"id": "islesplus",
+	"version": "${version}",
+	"name": "Isles+",
+	"description": "Skyblock Isles QOL mod.",
+	"authors": [
+		"chrrisk"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "LGPL-2.1-only",
+	"icon": "assets/islesplus/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.islesplus.Islesplus"
+		],
+		"fabric-datagen": [
+			"com.islesplus.IslesDataGenerator"
+		],
+		"client": [
+			"com.islesplus.IslesClient"
+		]
+	},
+	"mixins": [
+		"islesplus.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.18.4",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	}
+}

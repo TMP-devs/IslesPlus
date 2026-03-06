@@ -1,0 +1,25 @@
+{
+	"required": true,
+	"package": "com.islesplus.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"mixins": [],
+	"client": [
+		"ChatHudMixin",
+		"ClientPlayNetworkHandlerMixin",
+		"ConfirmScreenMixin",
+		"DisplayEntityGlowMixin",
+		"EntityGlowMixin",
+		"HandledScreenAccessor",
+		"HandledScreenMixin",
+		"InGameHudScoreboardMixin",
+		"SoundSystemMixin",
+		"TextDisplayEntityRendererMixin",
+		"TitleScreenMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}
