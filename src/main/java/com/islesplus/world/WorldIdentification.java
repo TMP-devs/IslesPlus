@@ -54,7 +54,7 @@ public final class WorldIdentification {
             } else {
                 pendingCheck = false;
                 // Timed out: if we saw a dungeon server but no rift name matched (unknown rift,
-                // not yet in our list), default to enabling dungeon features with minute-rounding
+                // not yet in our list), default to enabling dungeon features with entry-time
                 // fallback for timing. This handles new dungeons before a /ip refresh.
                 if (seenDungeonServer && world != PlayerWorld.RIFT && world != PlayerWorld.DISABLED_RIFT) {
                     world = PlayerWorld.RIFT;
@@ -76,7 +76,7 @@ public final class WorldIdentification {
         String matchedDisabledName = null;
         boolean isDisabled = false;
 
-        Map<String, Integer> knownRifts = RiftRepository.getRiftDurations();
+        Map<String, Double> knownRifts = RiftRepository.getRiftMultipliers();
         Set<String> disabledRifts = RiftRepository.getDisabledRifts();
 
         for (ScoreHolder holder : scoreboard.getKnownScoreHolders()) {
@@ -131,7 +131,7 @@ public final class WorldIdentification {
             return;
         }
 
-        // Known rift matched - full dungeon features with preset duration.
+        // Known rift matched - full dungeon features with score multiplier.
         if (foundDungeon && matchedRiftName != null) {
             world = PlayerWorld.RIFT;
             currentRiftName = matchedRiftName;

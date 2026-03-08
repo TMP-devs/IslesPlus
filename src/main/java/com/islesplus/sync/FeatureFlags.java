@@ -49,8 +49,11 @@ public final class FeatureFlags {
 
     private FeatureFlags() {}
 
+    /** Dev-only bypass: when true, isKilled() always returns false (all features enabled). */
+    public static volatile boolean devBypassKills = false;
+
     public static boolean isKilled(String key) {
-        return killed.contains(key);
+        return !devBypassKills && killed.contains(key);
     }
 
     public static String getMotd() {
