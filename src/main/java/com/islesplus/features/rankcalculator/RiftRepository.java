@@ -28,7 +28,7 @@ public final class RiftRepository {
     private static final Path CACHE_PATH = DATA_DIR.resolve("rift_cache.json");
     private static final AtomicBoolean refreshInFlight = new AtomicBoolean(false);
 
-    private static volatile Map<String, Integer> riftDurations = Collections.emptyMap();
+    private static volatile Map<String, Double> riftMultipliers = Collections.emptyMap();
     private static volatile Set<String> plushieRifts = Collections.emptySet();
     private static volatile Set<String> disabledRifts = Collections.emptySet();
 
@@ -37,7 +37,7 @@ public final class RiftRepository {
     public static void init() {
         ParsedRifts local = parseJson(readFile(CACHE_PATH));
         if (local != null) {
-            riftDurations = local.durations();
+            riftMultipliers = local.multipliers();
             plushieRifts = local.plushieRifts();
             disabledRifts = local.disabledRifts();
         }
@@ -58,8 +58,8 @@ public final class RiftRepository {
         return true;
     }
 
-    public static Map<String, Integer> getRiftDurations() {
-        return riftDurations;
+    public static Map<String, Double> getRiftMultipliers() {
+        return riftMultipliers;
     }
 
     public static Set<String> getPlushieRifts() {
@@ -98,7 +98,7 @@ public final class RiftRepository {
             String json = response.body();
             ParsedRifts fetched = parseJson(json);
             if (fetched != null) {
-                riftDurations = fetched.durations();
+                riftMultipliers = fetched.multipliers();
                 plushieRifts = fetched.plushieRifts();
                 disabledRifts = fetched.disabledRifts();
                 writeFile(CACHE_PATH, json);
@@ -111,7 +111,7 @@ public final class RiftRepository {
         }
     }
 
-    private record ParsedRifts(Map<String, Integer> durations, Set<String> plushieRifts, Set<String> disabledRifts) {}
+    private record ParsedRifts(Map<String, Double> multipliers, Set<String> plushieRifts, Set<String> disabledRifts) {}
 
     private static ParsedRifts parseJson(String json) {
         if (json == null || json.isBlank()) return null;
@@ -120,7 +120,9 @@ public final class RiftRepository {
             if (!root.isJsonObject()) return null;
             JsonObject rootObj = root.getAsJsonObject();
 
-            Map<String, Integer> durations = new LinkedHashMap<>();
+            // "duration_seconds" now stores the score multiplier for each rift,
+            // not a static duration. totalTimeSecs = totalPoints * multiplier.
+            Map<String, Double> multipliers = new LinkedHashMap<>();
             JsonElement riftsElement = rootObj.get("rifts");
             if (riftsElement != null && riftsElement.isJsonArray()) {
                 for (JsonElement riftEntry : riftsElement.getAsJsonArray()) {
@@ -129,7 +131,7 @@ public final class RiftRepository {
                     JsonElement nameElement = rift.get("name");
                     JsonElement durationElement = rift.get("duration_seconds");
                     if (nameElement == null || durationElement == null) continue;
-                    durations.put(nameElement.getAsString().toLowerCase(Locale.ROOT), durationElement.getAsInt());
+                    multipliers.put(nameElement.getAsString().toLowerCase(Locale.ROOT), durationElement.getAsDouble());
                 }
             }
 
@@ -137,7 +139,7 @@ public final class RiftRepository {
             Set<String> disabled = parseStringSet(rootObj.get("disabled_rifts"));
 
             return new ParsedRifts(
-                Collections.unmodifiableMap(durations),
+                Collections.unmodifiableMap(multipliers),
                 Collections.unmodifiableSet(plushie),
                 Collections.unmodifiableSet(disabled)
             );

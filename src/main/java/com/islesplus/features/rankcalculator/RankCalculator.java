@@ -1,5 +1,6 @@
 package com.islesplus.features.rankcalculator;
 
+import com.islesplus.IslesClient;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.entity.EntityScanResult;
@@ -77,11 +78,11 @@ public final class RankCalculator {
             Matcher m;
             if ((m = RIFT_TIME.matcher(text)).find()) {
                 currentTimeSecs = Integer.parseInt(m.group(1)) * 60 + Integer.parseInt(m.group(2));
-                if (totalTimeSecs == 0) {
-                    totalTimeSecs = resolveTotal(sidebar, currentTimeSecs);
-                }
                 currentPoints   = Integer.parseInt(m.group(3));
                 totalPoints     = Integer.parseInt(m.group(4));
+                if (totalTimeSecs == 0 && totalPoints > 0) {
+                    totalTimeSecs = resolveTotal(client);
+                }
             } else {
                 // Kills, chests, and boss may all appear on the same scoreboard line
                 if ((m = KILLS.matcher(text)).find()) {
@@ -100,21 +101,16 @@ public final class RankCalculator {
         }
     }
 
-    /**
-     * Returns the total rift duration in seconds.
-     * Checks the sidebar title against the known-rift map first; falls back to
-     * rounding the observed timer up to the nearest full minute so that players
-     * entering within the same minute share an identical baseline.
-     * e.g. unknown rift, join at 9:50 (590 s) → ceil(590/60)*60 = 600 → t = 590/600
-     */
-    private static int resolveTotal(ScoreboardObjective sidebar, int currentTimeSecs) {
-        String title = sidebar.getDisplayName().getString().toLowerCase(Locale.ROOT);
-        for (Map.Entry<String, Integer> entry : RiftRepository.getRiftDurations().entrySet()) {
-            if (title.contains(entry.getKey())) {
-                return entry.getValue();
+    private static int resolveTotal(MinecraftClient client) {
+        String name = WorldIdentification.currentRiftName;
+        if (!name.isEmpty()) {
+            Double multiplier = RiftRepository.getRiftMultipliers().get(name);
+            if (multiplier != null) {
+                return (int) Math.round(totalPoints * multiplier);
             }
         }
-        return (int) Math.ceil(currentTimeSecs / 60.0) * 60;
+        IslesClient.sendAlwaysMessage(client, "Unknown rift - score calculation may be slightly off.");
+        return currentTimeSecs;
     }
 
     private static String calculateRank() {

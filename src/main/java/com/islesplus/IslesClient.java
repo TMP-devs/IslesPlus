@@ -288,6 +288,10 @@ public class IslesClient implements ClientModInitializer {
         sendIslesMessage(client, message);
     }
 
+    public static void sendAlwaysMessage(MinecraftClient client, String message) {
+        sendIslesMessage(client, message);
+    }
+
     public static void sendWelcomeMessage(MinecraftClient client) {
         sendIslesMessage(client, "Use /ip to open the menu.");
         String motd = FeatureFlags.getMotd();
