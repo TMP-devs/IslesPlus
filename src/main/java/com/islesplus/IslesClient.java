@@ -20,6 +20,9 @@ import com.islesplus.features.nodealertmanager.NodeRepository;
 import com.islesplus.features.rankcalculator.RankCalculator;
 import com.islesplus.features.rankcalculator.RankHudRenderer;
 import com.islesplus.features.rankcalculator.RiftRepository;
+import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
+import com.islesplus.features.grounditemsnotifier.GroundItemsRenderer;
+import com.islesplus.features.grounditemsnotifier.GroundItemsHudRenderer;
 import com.islesplus.features.qtetracker.QteHudRenderer;
 import com.islesplus.features.qtetracker.QteTracker;
 import com.islesplus.features.qtetracker.QteRenderer;
@@ -30,6 +33,10 @@ import com.islesplus.features.plushiefinder.PlushieMenuHook;
 import com.islesplus.features.plushiefinder.PlushieRepository;
 import com.islesplus.features.plushiefinder.PlushieStatusHudRenderer;
 import com.islesplus.features.plushiefinder.PlushieWaypointRenderer;
+import com.islesplus.features.bosstracker.BossaryHook;
+import com.islesplus.features.autoparty.AutoParty;
+import com.islesplus.features.bosstracker.BossTimerHud;
+import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.resourcevault.ResourceVaultOpener;
 import com.islesplus.features.slotlocker.SlotLocker;
 import com.islesplus.world.WorldIdentification;
@@ -80,32 +87,44 @@ public class IslesClient implements ClientModInitializer {
     static final float ALERT_VOLUME = 2.0F;
     static final float ALERT_PITCH  = 1.0F;
 
-    static final KeyBinding LOCK_SLOT_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+    public static final KeyBinding LOCK_SLOT_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.lock_slot",
         InputUtil.Type.KEYSYM,
         GLFW.GLFW_KEY_L,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
-    static final KeyBinding CONFIRM_INVENTORY_FULL_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+    public static final KeyBinding CONFIRM_INVENTORY_FULL_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.confirm_inventory_full",
         InputUtil.Type.KEYSYM,
         GLFW.GLFW_KEY_J,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
-    static final KeyBinding BACKPACK_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+    public static final KeyBinding BACKPACK_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.backpack",
         InputUtil.Type.KEYSYM,
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
-    static final KeyBinding TRASH_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+    public static final KeyBinding TRASH_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.trash",
         InputUtil.Type.KEYSYM,
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
-    static final KeyBinding RESOURCE_VAULT_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+    public static final KeyBinding RESOURCE_VAULT_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.resource_vault",
+        InputUtil.Type.KEYSYM,
+        GLFW.GLFW_KEY_UNKNOWN,
+        KEYBIND_CATEGORY_ISLESPLUS
+    ));
+    public static final KeyBinding AUTO_PARTY_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        "key.islesplus.auto_party",
+        InputUtil.Type.KEYSYM,
+        GLFW.GLFW_KEY_UNKNOWN,
+        KEYBIND_CATEGORY_ISLESPLUS
+    ));
+    public static final KeyBinding PARTY_WARP_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        "key.islesplus.party_warp",
         InputUtil.Type.KEYSYM,
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
@@ -134,9 +153,11 @@ public class IslesClient implements ClientModInitializer {
 
             NerdModeActivator.onScreenOpen(handledScreen);
             ResourceVaultOpener.onScreenOpen(handledScreen);
+            BossaryHook.onScreenOpen(handledScreen);
             ScreenEvents.afterTick(screen).register(s -> {
                 NerdModeActivator.onScreenTick((HandledScreen<?>) s);
                 ResourceVaultOpener.onScreenTick((HandledScreen<?>) s);
+                BossaryHook.onScreenTick((HandledScreen<?>) s);
             });
 
             ScreenMouseEvents.allowMouseClick(screen).register((s, context) -> {
@@ -202,6 +223,7 @@ public class IslesClient implements ClientModInitializer {
             String text = message.getString();
             PlushieFinder.onMessage(text);
             HarvestTimer.onMessage(text);
+            BossTracker.onChatMessage(text);
         });
 
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
@@ -213,6 +235,7 @@ public class IslesClient implements ClientModInitializer {
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> {
             resetRuntimeState();
             WorldIdentification.onJoin();
+            BossTracker.onWorldJoin();
         }));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
             RefreshPoller.stop();
@@ -227,21 +250,51 @@ public class IslesClient implements ClientModInitializer {
             for (String alias : commandAliases) {
                 dispatcher.register(ClientCommandManager.literal(alias)
                     .executes(context -> {
-                        MinecraftClient client = MinecraftClient.getInstance();
-                        client.execute(() -> client.setScreen(new IslesScreen()));
+                        MinecraftClient client2 = MinecraftClient.getInstance();
+                        client2.execute(() -> client2.setScreen(new IslesScreen()));
                         return 1;
                     })
+                    .then(ClientCommandManager.literal("party")
+                        .executes(context -> {
+                            MinecraftClient client2 = MinecraftClient.getInstance();
+                            client2.execute(() -> AutoParty.trigger(client2));
+                            return 1;
+                        })
+                    )
+                    .then(ClientCommandManager.literal("rift")
+                        .then(ClientCommandManager.literal("setplayers")
+                            .then(ClientCommandManager.argument("count", com.mojang.brigadier.arguments.IntegerArgumentType.integer(1, 100))
+                                .executes(context -> {
+                                    int count = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(context, "count");
+                                    MinecraftClient client2 = MinecraftClient.getInstance();
+                                    client2.execute(() -> {
+                                        if (client2.player == null) return;
+                                        if (WorldIdentification.world != com.islesplus.world.PlayerWorld.RIFT) {
+                                            sendInfoMessage(client2, "/rift setplayers only works inside a Rift.");
+                                            return;
+                                        }
+                                        RankCalculator.playerCount = count;
+                                        sendInfoMessage(client2, "Player count set to " + count + ".");
+                                    });
+                                    return 1;
+                                })
+                            )
+                        )
+                    )
                 );
             }
         });
         WorldRenderEvents.AFTER_ENTITIES.register(PlushieWaypointRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(SecretBlockRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(QteRenderer::render);
+        WorldRenderEvents.AFTER_ENTITIES.register(GroundItemsRenderer::render);
         HudRenderCallback.EVENT.register((context, tickDelta) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             RankHudRenderer.render(context, mc);
             PlushieStatusHudRenderer.render(context, mc);
             QteHudRenderer.render(context, mc);
+            GroundItemsHudRenderer.render(context, mc);
+            BossTimerHud.render(context, mc);
         });
     }
 
@@ -250,6 +303,8 @@ public class IslesClient implements ClientModInitializer {
         while (BACKPACK_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("bp"); }
         while (TRASH_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("trash"); }
         while (RESOURCE_VAULT_KEY.wasPressed()) { ResourceVaultOpener.activate(); }
+        while (AUTO_PARTY_KEY.wasPressed()) { if (AutoParty.enabled) AutoParty.trigger(client); }
+        while (PARTY_WARP_KEY.wasPressed()) { if (AutoParty.enabled && client.player != null) client.player.networkHandler.sendChatCommand("p warp"); }
         EntityScanResult scan = EntityScanner.scan(client);
         NodeTracker.tick(client, scan);
         if (!FeatureFlags.isKilled("harvest_timer"))       HarvestTimer.tick();
@@ -267,6 +322,9 @@ public class IslesClient implements ClientModInitializer {
         if (!FeatureFlags.isKilled("mob_finder"))          MobFinder.tick(client, scan);
         if (!FeatureFlags.isKilled("player_finder"))       PlayerFinder.tick(client, scan);
         if (!FeatureFlags.isKilled("rank_calculator"))     RankCalculator.tick(client, scan);
+        if (!FeatureFlags.isKilled("ground_items_notifier")) GroundItemsNotifier.tick(client, scan);
+        if (!FeatureFlags.isKilled("boss_tracker"))         BossTracker.tick(client);
+        AutoParty.tick(client);
     }
 
     public static void setChatUpdatesEnabled(boolean enabled) {
@@ -361,6 +419,14 @@ public class IslesClient implements ClientModInitializer {
             .append(Text.literal(") ").styled(s -> s.withColor(Formatting.DARK_GRAY)));
     }
 
+    /** Prefix styled, body plain white — use for informational one-off messages. */
+    public static void sendInfoMessage(MinecraftClient client, String message) {
+        if (client.player == null) return;
+        MutableText body = Text.literal(message)
+            .styled(style -> style.withColor(Formatting.WHITE));
+        client.player.sendMessage(Text.empty().append(buildIslesPrefix()).append(body), false);
+    }
+
     private static void sendIslesMessage(MinecraftClient client, String message) {
         if (client.player == null) {
             return;
@@ -397,6 +463,7 @@ public class IslesClient implements ClientModInitializer {
         NodeTracker.reset();
         HarvestTimer.reset();
         NerdModeActivator.reset();
+        BossaryHook.reset();
         NodeRadiusRenderer.reset();
         NodeAlertManager.reset();
         DropNotifier.reset();
@@ -414,6 +481,8 @@ public class IslesClient implements ClientModInitializer {
         connectingToIsles = false;
         WorldIdentification.reset();
         RankCalculator.reset();
+        GroundItemsNotifier.reset();
+        BossTracker.reset();
     }
 
 }

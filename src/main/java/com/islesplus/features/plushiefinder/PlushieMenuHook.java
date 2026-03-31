@@ -109,7 +109,7 @@ public final class PlushieMenuHook {
         }
 
         TextRenderer tr = MinecraftClient.getInstance().textRenderer;
-        String text = "Plushie Finder  \u2014  " + found + " / " + plushies.size() + " found";
+        String text = "Plushie Finder  -  " + found + " / " + plushies.size() + " found";
         int tw = tr.getWidth(text);
         HandledScreenAccessor acc = (HandledScreenAccessor) screen;
         int guiX = acc.getGuiX();

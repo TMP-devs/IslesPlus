@@ -2,11 +2,16 @@ package com.islesplus.screen.islesscreen;
 
 import com.islesplus.IslesClient;
 import com.islesplus.IslesPlusConfig;
+import com.islesplus.features.autoparty.AutoParty;
+import com.islesplus.features.bosstracker.BossaryHook;
+import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.chatfilter.ChatFilter;
+import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
 import com.islesplus.features.inventorysearch.InventorySearch;
 import com.islesplus.features.chestfinder.ChestFinder;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.inventorynotifier.InventoryNotifier;
+import com.islesplus.sound.SoundConfig;
 import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.harvesttimer.HarvestTimer;
 import com.islesplus.features.harvesttimer.NerdModeActivator;
@@ -33,6 +38,14 @@ final class CardRegistry {
     private final List<FeatureCard> qolCards = new ArrayList<>();
     private final List<FeatureCard> nodeFarmingCards = new ArrayList<>();
     private final List<FeatureCard> riftCards = new ArrayList<>();
+    private final FeatureCard keybindsCard = new FeatureCard(
+        "Keybinds",
+        "Available Isles+ keybinds",
+        () -> Items.PAPER,
+        () -> false,
+        e -> {},
+        null, null, null, null, null, null, false
+    ).withKeybinds();
 
 
     // ==============================
@@ -47,11 +60,13 @@ final class CardRegistry {
             () -> InventoryNotifier.inventoryFullNotifyEnabled,
             enabled -> { InventoryNotifier.inventoryFullNotifyEnabled = enabled; IslesPlusConfig.save(); },
             null, null, null,
-            "Sound",
-            () -> InventoryNotifier.inventoryFullVolume,
-            v  -> { InventoryNotifier.inventoryFullVolume = v; },
-            false
-        ).withKilledKey("inventory_full"));
+            null, null, null, false
+        ).withKilledKey("inventory_full")
+         .withSoundConfig(
+             () -> InventoryNotifier.soundConfig,
+             v  -> InventoryNotifier.soundConfig = v,
+             new SoundConfig("minecraft:block.chest.open", 0.62f, 0.95f)
+         ));
         qolCards.add(new FeatureCard(
             "Mod-only Sounds",
             "Only hear mod-triggered audio",
@@ -74,8 +89,8 @@ final class CardRegistry {
             enabled -> { SlotLocker.slotLockEnabled = enabled; IslesPlusConfig.save(); }
         ));
         qolCards.add(new FeatureCard(
-            "Inventory Search",
-            "Search items in open inventories",
+            "Inventory QOL",
+            "Search bar and calculator for inventories",
             () -> Items.COMPASS,
             () -> InventorySearch.inventorySearchEnabled,
             enabled -> { InventorySearch.inventorySearchEnabled = enabled; IslesPlusConfig.save(); },
@@ -97,7 +112,44 @@ final class CardRegistry {
                 () -> { InventorySearch.barPosition = InventorySearch.SearchBarPosition.BOTTOM_LEFT; IslesPlusConfig.save(); }
             },
             null, null, null, false
-        ).withKilledKey("inventory_search"));
+        ).withKilledKey("inventory_search").withLegend(
+            "Use commas for AND search",
+            "Prefix with # to search lore"
+        ));
+        qolCards.add(new FeatureCard(
+            "Ground Items Notifier",
+            "Highlight dropped items on the ground",
+            () -> Items.GOLD_NUGGET,
+            () -> GroundItemsNotifier.groundItemsNotifierEnabled,
+            enabled -> { GroundItemsNotifier.groundItemsNotifierEnabled = enabled; IslesPlusConfig.save(); },
+            null, null, null,
+            null, null, null, false
+        ).withItemList());
+        FeatureCard bossCard = new FeatureCard(
+            "Boss Timers",
+            "Track world boss spawn timers",
+            () -> Items.GHAST_TEAR,
+            () -> BossTracker.bossTrackerEnabled,
+            enabled -> {
+                BossTracker.bossTrackerEnabled = enabled;
+                if (enabled && BossTracker.autoOpenBossary) {
+                    BossTracker.pendingBossaryOpen = true;
+                }
+                IslesPlusConfig.save();
+            },
+            null, null, null,
+            null, null, null, false
+        ).withKilledKey("boss_tracker").withBossList();
+        qolCards.add(bossCard);
+        qolCards.add(new FeatureCard(
+            "Auto Party",
+            "One keybind to invite your party",
+            () -> Items.PLAYER_HEAD,
+            () -> AutoParty.enabled,
+            enabled -> { AutoParty.enabled = enabled; IslesPlusConfig.save(); },
+            null, null, null,
+            null, null, null, false
+        ).withAutoParty());
         qolCards.add(new FeatureCard(
             "Chat Filters",
             "Hide unwanted chat messages",
@@ -134,11 +186,13 @@ final class CardRegistry {
             () -> DropNotifier.dropNotifyEnabled,
             enabled -> { DropNotifier.dropNotifyEnabled = enabled; IslesPlusConfig.save(); },
             null, null, null,
-            "Sound",
-            () -> DropNotifier.dropNotifyVolume,
-            v  -> { DropNotifier.dropNotifyVolume = v; },
-            false
-        ).withKilledKey("drop_notify"));
+            null, null, null, false
+        ).withKilledKey("drop_notify")
+         .withSoundConfig(
+             () -> DropNotifier.soundConfig,
+             v  -> DropNotifier.soundConfig = v,
+             new SoundConfig("minecraft:entity.ender_dragon.growl", 0.85f, 1.00f)
+         ));
         nodeFarmingCards.add(new FeatureCard(
             "Node Depleted Ping",
             "Alert when current node depletes",
@@ -146,11 +200,13 @@ final class CardRegistry {
             () -> NodeAlertManager.depletionPingEnabled,
             enabled -> { NodeAlertManager.depletionPingEnabled = enabled; IslesPlusConfig.save(); },
             null, null, null,
-            "Sound",
-            () -> NodeAlertManager.depletionPingVolume,
-            v  -> { NodeAlertManager.depletionPingVolume = v; },
-            false
-        ).withKilledKey("node_depleted_ping"));
+            null, null, null, false
+        ).withKilledKey("node_depleted_ping")
+         .withSoundConfig(
+             () -> NodeAlertManager.depletionSoundConfig,
+             v  -> NodeAlertManager.depletionSoundConfig = v,
+             new SoundConfig("minecraft:block.note_block.bass", 0.85f, 0.60f)
+         ));
         nodeFarmingCards.add(new FeatureCard(
             "Regen Mode",
             "Ping when node regenerates",
@@ -174,11 +230,13 @@ final class CardRegistry {
                 () -> { NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.SHORT_PING;          NodeAlertManager.regenReminderActive = false; IslesPlusConfig.save(); },
                 () -> { NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.PING_UNTIL_INTERACT;                                                IslesPlusConfig.save(); }
             },
-            "Sound",
-            () -> NodeAlertManager.regenPingVolume,
-            v  -> { NodeAlertManager.regenPingVolume = v; },
-            false
-        ).withKilledKey("regen_mode"));
+            null, null, null, false
+        ).withKilledKey("regen_mode")
+         .withSoundConfig(
+             () -> NodeAlertManager.regenSoundConfig,
+             v  -> NodeAlertManager.regenSoundConfig = v,
+             new SoundConfig("minecraft:block.note_block.bell", 1.00f, 1.00f)
+         ));
         nodeFarmingCards.add(new FeatureCard(
             "Harvest Timer",
             "Auto-enables Nerd Mode via /settings",
@@ -291,14 +349,15 @@ final class CardRegistry {
             () -> Items.NETHER_STAR,
             () -> RankCalculator.rankCalculatorEnabled,
             riftToggle(enabled -> { RankCalculator.rankCalculatorEnabled = enabled; IslesPlusConfig.save(); }),
-            null, null, null,
+            new String[]{"Show player count", "Show rank drop timer"},
+            new BooleanSupplier[]{ () -> RankCalculator.showPlayerCount, () -> RankCalculator.showRankDropTimer },
+            new Runnable[]{ () -> { RankCalculator.showPlayerCount = !RankCalculator.showPlayerCount; IslesPlusConfig.save(); },
+                            () -> { RankCalculator.showRankDropTimer = !RankCalculator.showRankDropTimer; IslesPlusConfig.save(); } },
             null, null, null, false
         ).withKilledKey("rank_calculator").withLegend(
             "\u2620 Mob = 1 point",
             "\uD83C\uDF81 Chest = 5 points",
-            "\uD83D\uDC51 Boss = 25 points",
-            "",
-            "\u23F1 Roughly Every 7s = -1 point"
+            "\uD83D\uDC51 Boss = 25 points"
         ));
     }
 
@@ -319,10 +378,13 @@ final class CardRegistry {
     }
 
     List<FeatureCard> getActiveCards(Tab tab) {
-        return switch (tab) {
+        List<FeatureCard> base = switch (tab) {
             case QOL -> qolCards;
             case NODE_FARMING -> nodeFarmingCards;
             case RIFT -> riftCards;
         };
+        List<FeatureCard> result = new ArrayList<>(base);
+        if (tab == Tab.QOL) result.add(keybindsCard);
+        return result;
     }
 }

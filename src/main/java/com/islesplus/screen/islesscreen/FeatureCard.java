@@ -1,5 +1,6 @@
 package com.islesplus.screen.islesscreen;
 
+import com.islesplus.sound.SoundConfig;
 import net.minecraft.item.Item;
 
 import java.util.function.BooleanSupplier;
@@ -17,6 +18,13 @@ final class FeatureCard {
     String note = null; // optional small warning rendered below description
     String killedKey = null; // optional remote kill-switch key
     String[] legendLines = null; // optional text lines shown when expanded
+    boolean isItemListCard = false; // renders the GroundItemsCardRenderer body instead of normal options
+    boolean isBossListCard = false;
+    boolean isAutoPartyCard = false;
+    boolean isKeybindsCard = false;
+    Supplier<SoundConfig> soundConfigSupplier = null;
+    Consumer<SoundConfig> soundConfigSetter   = null;
+    SoundConfig defaultSoundConfig            = null;
     final Supplier<Item> iconSupplier;
     final BooleanSupplier enabledSupplier;
     final Consumer<Boolean> toggleAction;
@@ -114,6 +122,33 @@ final class FeatureCard {
 
     FeatureCard withLegend(String... lines) {
         this.legendLines = lines;
+        return this;
+    }
+
+    FeatureCard withItemList() {
+        this.isItemListCard = true;
+        return this;
+    }
+
+    FeatureCard withBossList() {
+        this.isBossListCard = true;
+        return this;
+    }
+
+    FeatureCard withAutoParty() {
+        this.isAutoPartyCard = true;
+        return this;
+    }
+
+    FeatureCard withKeybinds() {
+        this.isKeybindsCard = true;
+        return this;
+    }
+
+    FeatureCard withSoundConfig(Supplier<SoundConfig> getter, Consumer<SoundConfig> setter, SoundConfig defaults) {
+        this.soundConfigSupplier = getter;
+        this.soundConfigSetter   = setter;
+        this.defaultSoundConfig  = defaults;
         return this;
     }
 

@@ -1,6 +1,7 @@
 package com.islesplus.features.inventorynotifier;
 
 import com.islesplus.sound.ModSounds;
+import com.islesplus.sound.SoundConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
@@ -10,7 +11,7 @@ public class InventoryNotifier {
     private static final long INVENTORY_FULL_REPEAT_MS = 1_400L;
 
     public static boolean inventoryFullNotifyEnabled = false;
-    public static float inventoryFullVolume = 0.5f;
+    public static SoundConfig soundConfig = new SoundConfig("minecraft:block.chest.open", 0.62f, 0.95f);
 
     private static long lastInventoryFullNotifyMs = 0L;
     private static boolean showing = false;
@@ -31,7 +32,7 @@ public class InventoryNotifier {
             showing = true;
             long now = Util.getMeasuringTimeMs();
             if (now - lastInventoryFullNotifyMs >= INVENTORY_FULL_REPEAT_MS) {
-                ModSounds.playScaled(client, ModSounds.Cue.INVENTORY_FULL, inventoryFullVolume);
+                ModSounds.playConfig(client, soundConfig);
                 client.inGameHud.setTitleTicks(0, 40, 5);
                 client.inGameHud.setSubtitle(
                     Text.literal("Press " + confirmKeyText.getString() + " to confirm")

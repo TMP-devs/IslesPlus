@@ -12,21 +12,16 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.input.KeyInput;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.LoreComponent;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.Slot;
-import net.minecraft.text.Text;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Inventory search bar - click to focus, then type to filter items.
+ * Text state lives in {@link SearchTextState}, calculator in {@link InventoryCalculator}.
  *
  * Search syntax (comma-separated AND terms):
  *   text  - matches item display name
  *   #text - matches item lore and NBT data
- *
- * Example: "iron,#sharp" shows items named "iron" that have "sharp" in lore/NBT.
  */
 public final class InventorySearch {
     public enum SearchBarPosition {
@@ -36,21 +31,24 @@ public final class InventorySearch {
 
     public static boolean inventorySearchEnabled = false;
     public static SearchBarPosition barPosition = SearchBarPosition.TOP_LEFT;
-    private static String searchText = "";
-    private static boolean focused = false;
-
-    /** Parsed from searchText whenever it changes. Each entry is trimmed and lowercased. */
-    private static String[] parsedTerms = new String[0];
 
     private static final int MARGIN = 4;
     static final int BAR_W = 140;
     static final int BAR_H = 16;
+    static final int CHEVRON_W = 14;
 
     private static int barX(int screenW) {
         return switch (barPosition) {
             case TOP_LEFT, BOTTOM_LEFT -> MARGIN;
             case TOP_CENTER, BOTTOM_CENTER -> screenW / 2 - BAR_W / 2;
             case TOP_RIGHT, BOTTOM_RIGHT -> screenW - BAR_W - MARGIN;
+        };
+    }
+
+    private static int chevronX(int bx) {
+        return switch (barPosition) {
+            case TOP_LEFT, BOTTOM_LEFT -> bx + BAR_W;
+            default -> bx - CHEVRON_W;
         };
     }
 
@@ -63,21 +61,14 @@ public final class InventorySearch {
 
     private InventorySearch() {}
 
-    private static void setSearchText(String text) {
-        searchText = text;
-        if (text.isEmpty()) {
-            parsedTerms = new String[0];
-        } else {
-            String[] raw = text.split(",");
-            for (int i = 0; i < raw.length; i++) raw[i] = raw[i].trim().toLowerCase();
-            parsedTerms = raw;
-        }
-    }
-
     public static void register() {
         ScreenEvents.BEFORE_INIT.register((client, screen, w, h) -> {
             if (!(screen instanceof HandledScreen<?>)) return;
-            focused = false;
+            SearchTextState.focused = false;
+            SearchTextState.cursorPos = SearchTextState.searchText.length();
+            SearchTextState.selectionStart = -1;
+            InventoryCalculator.open = false;
+            InventoryCalculator.clear();
 
             ScreenMouseEvents.allowMouseClick(screen).register(InventorySearch::onMouseClick);
             ScreenKeyboardEvents.allowKeyPress(screen).register(InventorySearch::onKeyPress);
@@ -91,101 +82,54 @@ public final class InventorySearch {
         double my = click.y();
         int bx = barX(screen.width);
         int by = barY(screen.height);
-        boolean hitBar = mx >= bx && mx <= bx + BAR_W && my >= by && my <= by + BAR_H;
-        focused = hitBar;
-        return !hitBar;
-    }
 
-    private static boolean onKeyPress(Screen screen, KeyInput context) {
-        if (!inventorySearchEnabled || !focused || FeatureFlags.isKilled("inventory_search") || WorldIdentification.world == PlayerWorld.OTHER) return true;
-
-        int key = context.key();
-        boolean ctrl = (context.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-
-        if (key == GLFW.GLFW_KEY_BACKSPACE) {
-            if (ctrl) {
-                setSearchText("");
-            } else if (!searchText.isEmpty()) {
-                setSearchText(searchText.substring(0, searchText.length() - 1));
-            }
-            return false;
-        }
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
-            if (!searchText.isEmpty()) {
-                setSearchText("");
-            } else {
-                focused = false;
-            }
-            return false;
-        }
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-            focused = false;
+        // Chevron toggle
+        int cx = chevronX(bx);
+        if (mx >= cx && mx <= cx + CHEVRON_W && my >= by && my <= by + BAR_H) {
+            InventoryCalculator.toggle();
+            SearchTextState.focused = false;
             return false;
         }
 
-        if (!ctrl && searchText.length() < 50) {
-            boolean shift = (context.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-            char c = keyToChar(key, shift);
-            if (c != 0) {
-                setSearchText(searchText + c);
+        // Calculator panel clicks
+        if (InventoryCalculator.open) {
+            if (InventoryCalculator.handleClick(screen, mx, my, bx, by)) {
+                SearchTextState.focused = false;
+                InventoryCalculator.focused = true;
                 return false;
             }
         }
 
-        return true;
-    }
-
-    private static char keyToChar(int key, boolean shift) {
-        if (key >= GLFW.GLFW_KEY_A && key <= GLFW.GLFW_KEY_Z) {
-            return (char) (shift ? key : key + 32);
-        }
-        if (key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) {
-            if (!shift) return (char) key;
-            return ")!@#$%^&*(".charAt(key - GLFW.GLFW_KEY_0);
-        }
-        if (shift) {
-            return switch (key) {
-                case GLFW.GLFW_KEY_MINUS        -> '_';
-                case GLFW.GLFW_KEY_EQUAL        -> '+';
-                case GLFW.GLFW_KEY_LEFT_BRACKET -> '{';
-                case GLFW.GLFW_KEY_RIGHT_BRACKET-> '}';
-                case GLFW.GLFW_KEY_BACKSLASH    -> '|';
-                case GLFW.GLFW_KEY_SEMICOLON    -> ':';
-                case GLFW.GLFW_KEY_APOSTROPHE   -> '"';
-                case GLFW.GLFW_KEY_COMMA        -> '<';
-                case GLFW.GLFW_KEY_PERIOD       -> '>';
-                case GLFW.GLFW_KEY_SLASH        -> '?';
-                case GLFW.GLFW_KEY_GRAVE_ACCENT -> '~';
-                default -> 0;
-            };
+        boolean hitBar = mx >= bx && mx <= bx + BAR_W && my >= by && my <= by + BAR_H;
+        SearchTextState.focused = hitBar;
+        if (hitBar) {
+            InventoryCalculator.focused = false;
+            SearchTextState.cursorPos = SearchTextState.searchText.length();
+            SearchTextState.selectionStart = -1;
         } else {
-            return switch (key) {
-                case GLFW.GLFW_KEY_SPACE        -> ' ';
-                case GLFW.GLFW_KEY_MINUS        -> '-';
-                case GLFW.GLFW_KEY_EQUAL        -> '=';
-                case GLFW.GLFW_KEY_LEFT_BRACKET -> '[';
-                case GLFW.GLFW_KEY_RIGHT_BRACKET-> ']';
-                case GLFW.GLFW_KEY_BACKSLASH    -> '\\';
-                case GLFW.GLFW_KEY_SEMICOLON    -> ';';
-                case GLFW.GLFW_KEY_APOSTROPHE   -> '\'';
-                case GLFW.GLFW_KEY_COMMA        -> ',';
-                case GLFW.GLFW_KEY_PERIOD       -> '.';
-                case GLFW.GLFW_KEY_SLASH        -> '/';
-                case GLFW.GLFW_KEY_GRAVE_ACCENT -> '`';
-                default -> 0;
-            };
+            InventoryCalculator.focused = false;
         }
+        return !hitBar;
     }
 
-    /**
-     * Called from HandledScreenMixin.drawSlot (at TAIL).
-     * Coordinates are GUI-relative; the draw context matrix is already translated to the GUI origin.
-     */
+    private static boolean onKeyPress(Screen screen, KeyInput context) {
+        if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search") || WorldIdentification.world == PlayerWorld.OTHER) return true;
+
+        if (InventoryCalculator.open && InventoryCalculator.focused) {
+            return InventoryCalculator.handleKeyPress(context);
+        }
+
+        if (!SearchTextState.focused) return true;
+        return SearchTextState.handleKeyPress(context);
+    }
+
+    /** Called from HandledScreenMixin.drawSlot (at TAIL). */
     public static void drawSlotOverlay(DrawContext context, Slot slot) {
-        if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search") || searchText.isEmpty() || WorldIdentification.world == PlayerWorld.OTHER) return;
+        if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search")
+                || SearchTextState.searchText.isEmpty() || WorldIdentification.world == PlayerWorld.OTHER) return;
         ItemStack stack = slot.getStack();
         if (stack.isEmpty()) return;
-        if (!matchesSearch(stack)) {
+        if (!SearchTextState.matchesSearch(stack)) {
             context.fill(slot.x, slot.y, slot.x + 16, slot.y + 16, 0xAA000000);
         }
     }
@@ -194,80 +138,72 @@ public final class InventorySearch {
         if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search")) return;
         if (WorldIdentification.world == PlayerWorld.OTHER) return;
         MinecraftClient client = MinecraftClient.getInstance();
+        boolean focused = SearchTextState.focused;
 
         int bx = barX(screen.width);
         int by = barY(screen.height);
 
-        // Border
+        // Chevron
+        int cx = chevronX(bx);
+        ctx.fill(cx - 1, by - 1, cx + CHEVRON_W, by + BAR_H + 1, 0xFF555555);
+        ctx.fill(cx, by, cx + CHEVRON_W, by + BAR_H, 0xFF1E1E1E);
+        drawChevron(ctx, cx + CHEVRON_W / 2, by + BAR_H / 2, InventoryCalculator.open, 0xFFAAAAAA);
+
+        // Border + background
         int borderColor = focused ? 0xFF3A8DDE : 0xFF555555;
-        ctx.fill(bx - 1, by - 1, bx + BAR_W + 1, by,                    borderColor);
-        ctx.fill(bx - 1, by + BAR_H, bx + BAR_W + 1, by + BAR_H + 1,    borderColor);
-        ctx.fill(bx - 1, by,          bx,             by + BAR_H,         borderColor);
-        ctx.fill(bx + BAR_W, by,      bx + BAR_W + 1, by + BAR_H,        borderColor);
-        // Background
+        ctx.fill(bx - 1, by - 1, bx + BAR_W + 1, by,                 borderColor);
+        ctx.fill(bx - 1, by + BAR_H, bx + BAR_W + 1, by + BAR_H + 1, borderColor);
+        ctx.fill(bx - 1, by, bx, by + BAR_H,                          borderColor);
+        ctx.fill(bx + BAR_W, by, bx + BAR_W + 1, by + BAR_H,          borderColor);
         ctx.fill(bx, by, bx + BAR_W, by + BAR_H, 0xFF1E1E1E);
 
         // Text / placeholder
-        if (searchText.isEmpty() && !focused) {
-            ctx.drawText(client.textRenderer, "Search...", bx + 4, by + 4, 0xFF888888, false);
+        int textX = bx + 4, textY = by + 4, maxW = BAR_W - 8;
+        if (SearchTextState.searchText.isEmpty() && !focused) {
+            ctx.drawText(client.textRenderer, "Search...", textX, textY, 0xFF888888, false);
         } else {
-            boolean cursorOn = focused && (System.currentTimeMillis() % 1000) < 500;
-            String full = searchText + (cursorOn ? "|" : "");
-            int maxW = BAR_W - 6;
-            String display = full;
-            while (client.textRenderer.getWidth(display) > maxW && display.length() > 1) {
-                display = display.substring(1);
-            }
-            ctx.drawText(client.textRenderer, display, bx + 4, by + 4, 0xFFFFFFFF, false);
+            renderSearchText(ctx, client, focused, textX, textY, maxW, bx, by);
         }
 
-        // Hint - show above or below depending on position
-        if (focused) {
-            boolean atBottom = barPosition == SearchBarPosition.BOTTOM_LEFT
-                    || barPosition == SearchBarPosition.BOTTOM_CENTER
-                    || barPosition == SearchBarPosition.BOTTOM_RIGHT;
-            int hintY = atBottom ? by - client.textRenderer.fontHeight - 3 : by + BAR_H + 3;
-            ctx.drawText(client.textRenderer, "commas = AND  |  # = lore", bx, hintY, 0xFF888888, false);
+        if (InventoryCalculator.open) {
+            InventoryCalculator.render(ctx, client, bx, by, screen.width, screen.height);
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Matching
-    // -------------------------------------------------------------------------
+    private static void renderSearchText(DrawContext ctx, MinecraftClient client, boolean focused,
+                                          int textX, int textY, int maxW, int bx, int by) {
+        int cursorPixel = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.cursorPos));
+        int scrollOffset = cursorPixel > maxW ? cursorPixel - maxW : 0;
 
-    /**
-     * Terms without '#' match against the item display name.
-     * Terms with '#' match against lore lines and component/NBT data.
-     * All terms must match (AND logic).
-     */
-    private static boolean matchesSearch(ItemStack stack) {
-        String loreAndNbt = null;
-        for (String term : parsedTerms) {
-            if (term.isEmpty()) continue;
-            if (term.startsWith("#")) {
-                String query = term.substring(1);
-                if (query.isEmpty()) continue;
-                if (loreAndNbt == null) loreAndNbt = getItemLoreAndNbtText(stack);
-                if (!loreAndNbt.contains(query)) return false;
-            } else {
-                if (!stack.getName().getString().toLowerCase().contains(term)) return false;
-            }
+        if (focused && SearchTextState.hasSelection()) {
+            int selStartPx = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.selMin())) - scrollOffset;
+            int selEndPx = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.selMax())) - scrollOffset;
+            int hlX1 = Math.max(0, selStartPx) + textX;
+            int hlX2 = Math.min(maxW, selEndPx) + textX;
+            if (hlX2 > hlX1) ctx.fill(hlX1, textY - 1, hlX2, textY + client.textRenderer.fontHeight, 0xFF3A6EA5);
         }
-        return true;
+
+        ctx.enableScissor(textX, by, bx + BAR_W - 4, by + BAR_H);
+        ctx.drawText(client.textRenderer, SearchTextState.searchText, textX - scrollOffset, textY, 0xFFFFFFFF, false);
+        ctx.disableScissor();
+
+        if (focused && (System.currentTimeMillis() % 1000) < 500) {
+            int cursorX = textX + cursorPixel - scrollOffset;
+            ctx.fill(cursorX, textY - 1, cursorX + 1, textY + client.textRenderer.fontHeight, 0xFFFFFFFF);
+        }
     }
 
-    private static String getItemLoreAndNbtText(ItemStack stack) {
-        StringBuilder sb = new StringBuilder();
-        LoreComponent lore = stack.get(DataComponentTypes.LORE);
-        if (lore != null) {
-            for (Text line : lore.lines()) {
-                sb.append(line.getString()).append(' ');
-            }
+    private static void drawChevron(DrawContext ctx, int cx, int cy, boolean down, int color) {
+        if (down) {
+            ctx.fill(cx - 3, cy - 1, cx + 4, cy, color);
+            ctx.fill(cx - 2, cy, cx + 3, cy + 1, color);
+            ctx.fill(cx - 1, cy + 1, cx + 2, cy + 2, color);
+            ctx.fill(cx, cy + 2, cx + 1, cy + 3, color);
+        } else {
+            ctx.fill(cx - 1, cy - 3, cx, cy + 4, color);
+            ctx.fill(cx, cy - 2, cx + 1, cy + 3, color);
+            ctx.fill(cx + 1, cy - 1, cx + 2, cy + 2, color);
+            ctx.fill(cx + 2, cy, cx + 3, cy + 1, color);
         }
-        try {
-            sb.append(stack.getComponents().toString());
-        } catch (Exception ignored) {}
-        return sb.toString().toLowerCase();
     }
-
 }

@@ -6,5 +6,7 @@
   "key.islesplus.confirm_inventory_full": "Inventory Confirm",
   "key.islesplus.backpack": "Open Backpack (/bp)",
   "key.islesplus.trash": "Open Trash (/trash)",
-  "key.islesplus.resource_vault": "Open Resource Vault"
+  "key.islesplus.resource_vault": "Open Resource Vault",
+  "key.islesplus.auto_party": "Auto Party",
+  "key.islesplus.party_warp": "Party Warp (/p warp)"
 }

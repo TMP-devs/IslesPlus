@@ -18,6 +18,8 @@ import java.util.regex.Pattern;
 
 public final class RankCalculator {
     public static boolean rankCalculatorEnabled = false;
+    public static boolean showPlayerCount = false;
+    public static boolean showRankDropTimer = false;
 
     // Player count - tracks max seen, never decreases
     public static int playerCount = 1;
@@ -182,24 +184,68 @@ public final class RankCalculator {
     }
 
     /**
-     * When rank is not S, returns the additional points needed to reach S rank.
-     * Returns -1 if already S, data not ready, or S is impossible at current time.
+     * Returns the name of the next rank above the current one, or null if already S or no data.
+     */
+    public static String getNextRank() {
+        if ("S".equals(lastRank) || "--".equals(lastRank)) return null;
+        for (int i = 0; i < GRADES.length; i++) {
+            if (GRADES[i].equals(lastRank)) return GRADES[i - 1]; // one step up
+        }
+        return GRADES[GRADES.length - 1]; // F -> E
+    }
+
+    /**
+     * Returns points needed to reach the next rank above current.
+     * Returns -1 if already S, data not ready, or next rank is impossible at current time.
      */
     public static int getPointsUntilPromotion() {
         if (totalTimeSecs == 0 || totalPoints == 0) return -1;
-        if ("S".equals(lastRank)) return -1;
+        if ("S".equals(lastRank) || "--".equals(lastRank)) return -1;
+
+        // Find the threshold index for the next rank
+        int thresholdIdx = -1;
+        for (int i = 0; i < GRADES.length; i++) {
+            if (GRADES[i].equals(lastRank)) { thresholdIdx = i - 1; break; }
+        }
+        if (thresholdIdx < 0) thresholdIdx = THRESHOLDS.length - 1; // F rank -> need to cross E threshold
 
         double t = (double) currentTimeSecs / totalTimeSecs;
         double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
 
-        // Need rawScore > THRESHOLDS[0] * m
-        // (s * 4.0 + t) / 5.0 > 0.9 * m  =>  s > (4.5 * m - t) / 4.0
-        double sThreshold = (4.5 * m - t) / 4.0;
+        // rawScore = (s * 4.0 + t) / 5.0 > THRESHOLDS[thresholdIdx] * m
+        // => s > (5.0 * threshold * m - t) / 4.0
+        double sThreshold = (5.0 * THRESHOLDS[thresholdIdx] * m - t) / 4.0;
 
-        if (sThreshold >= 1.0) return -1; // impossible: even max points can't reach S
+        if (sThreshold >= 1.0) return -1; // impossible
+        if (sThreshold <= 0) return 0;
 
         int minPoints = (int) Math.floor(sThreshold * totalPoints) + 1;
         return Math.max(0, minPoints - currentPoints);
+    }
+
+    /**
+     * For non-S ranks: seconds until current rank drops to the one below.
+     * Returns -1 if not applicable, rank is safe, or data not ready.
+     */
+    public static int getSecondsUntilRankDrop() {
+        if (totalTimeSecs == 0 || totalPoints == 0) return -1;
+        if ("S".equals(lastRank) || "--".equals(lastRank) || "F".equals(lastRank)) return -1;
+
+        int thresholdIdx = -1;
+        for (int i = 0; i < GRADES.length; i++) {
+            if (GRADES[i].equals(lastRank)) { thresholdIdx = i; break; }
+        }
+        if (thresholdIdx < 0) return -1;
+
+        double s = (double) currentPoints / totalPoints;
+        double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
+
+        // Solve for t where rawScore == THRESHOLDS[thresholdIdx] * m
+        double tThreshold = 5.0 * THRESHOLDS[thresholdIdx] * m - s * 4.0;
+        if (tThreshold <= 0) return -1; // points are high enough — can't drop
+
+        int timeSecsAtThreshold = (int) Math.ceil(tThreshold * totalTimeSecs);
+        return Math.max(0, currentTimeSecs - timeSecsAtThreshold);
     }
 
     public static int getRankColor() {

@@ -7,6 +7,13 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.islesplus.features.chatfilter.ChatFilter;
+import com.islesplus.sound.ModSounds;
+import com.islesplus.sound.SoundConfig;
+
+import java.util.ArrayList;
+import com.islesplus.features.bosstracker.BossTracker;
+import com.islesplus.features.autoparty.AutoParty;
+import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
 import com.islesplus.features.inventorysearch.InventorySearch;
 import com.islesplus.features.chestfinder.ChestFinder;
 import com.islesplus.features.dropnotifier.DropNotifier;
@@ -58,13 +65,17 @@ public final class IslesPlusConfig {
 
         IslesClient.chatUpdatesEnabled                    = getBool(obj,  "chatUpdatesEnabled",              false);
         IslesClient.modOnlySoundsEnabled                  = getBool(obj,  "modOnlySoundsEnabled",            false);
-        InventoryNotifier.inventoryFullNotifyEnabled       = getBool(obj,  "inventoryFullNotifyEnabled",      false);
-        InventoryNotifier.inventoryFullVolume              = getFloat(obj, "inventoryFullVolume",             0.5f);
-        DropNotifier.dropNotifyEnabled              = getBool(obj,  "dropNotifyEnabled",               true);
-        DropNotifier.dropNotifyVolume               = getFloat(obj, "dropNotifyVolume",                0.5f);
-        NodeAlertManager.depletionPingEnabled       = getBool(obj,  "depletionPingEnabled",            true);
-        NodeAlertManager.depletionPingVolume        = getFloat(obj, "depletionPingVolume",             0.5f);
-        NodeAlertManager.regenPingVolume            = getFloat(obj, "regenPingVolume",                 0.5f);
+        InventoryNotifier.inventoryFullNotifyEnabled = getBool(obj,  "inventoryFullNotifyEnabled", false);
+        InventoryNotifier.soundConfig = loadSoundConfig(obj, "inventoryFull",
+            InventoryNotifier.soundConfig);
+        DropNotifier.dropNotifyEnabled = getBool(obj, "dropNotifyEnabled", true);
+        DropNotifier.soundConfig = loadSoundConfig(obj, "dropNotify",
+            DropNotifier.soundConfig);
+        NodeAlertManager.depletionPingEnabled = getBool(obj, "depletionPingEnabled", true);
+        NodeAlertManager.depletionSoundConfig = loadSoundConfig(obj, "depletionPing",
+            NodeAlertManager.depletionSoundConfig);
+        NodeAlertManager.regenSoundConfig = loadSoundConfig(obj, "regenPing",
+            NodeAlertManager.regenSoundConfig);
         NodeRadiusRenderer.nodeRadiusEnabled        = getBool(obj, "nodeRadiusEnabled",               false);
         PlushieFinder.plushieFinderEnabled          = getBool(obj, "plushieFinderEnabled",            true);
         SlotLocker.slotLockEnabled                  = getBool(obj, "slotLockEnabled",                 true);
@@ -79,16 +90,71 @@ public final class IslesPlusConfig {
         VendingMachineFinder.vendingMachineFinderEnabled = getBool(obj, "vendingMachineFinderEnabled", false);
         VendingMachineFinder.glowHue                = getFloat(obj, "vendingMachineFinderGlowHue",    0.092f);
         RankCalculator.rankCalculatorEnabled        = getBool(obj, "rankCalculatorEnabled",           false);
+        RankCalculator.showPlayerCount              = getBool(obj, "rankShowPlayerCount",              false);
+        RankCalculator.showRankDropTimer            = getBool(obj, "rankShowDropTimer",                false);
         HarvestTimer.harvestTimerEnabled            = getBool(obj, "harvestTimerEnabled",             false);
         QteTracker.qteTrackerEnabled  = getBool(obj,  "qteTrackerEnabled",   true);
+        GroundItemsNotifier.groundItemsNotifierEnabled = getBool(obj, "groundItemsNotifierEnabled", false);
+        BossTracker.bossTrackerEnabled = getBool(obj, "bossTrackerEnabled", false);
+        BossTracker.autoOpenBossary    = getBool(obj, "bossAutoOpen", false);
+        if (obj.has("bossHudPosition")) {
+            try { BossTracker.hudPosition = BossTracker.BossHudPosition.valueOf(obj.get("bossHudPosition").getAsString()); }
+            catch (RuntimeException ignored) {}
+        }
+        BossTracker.hiddenBossNames.clear();
+        if (obj.has("bossHiddenBosses") && obj.get("bossHiddenBosses").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("bossHiddenBosses")) {
+                if (el.isJsonPrimitive()) BossTracker.hiddenBossNames.add(el.getAsString());
+            }
+        }
+        AutoParty.enabled          = getBool(obj, "autoPartyEnabled",      false);
+        AutoParty.autoLeaveDisband = getBool(obj, "autoLeaveDisband",      false);
+        AutoParty.friends.clear();
+        if (obj.has("autoPartyFriends") && obj.get("autoPartyFriends").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("autoPartyFriends")) {
+                if (el.isJsonPrimitive()) AutoParty.friends.add(el.getAsString());
+            }
+        }
+        AutoParty.groups.clear();
+        if (obj.has("autoPartyGroups") && obj.get("autoPartyGroups").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("autoPartyGroups")) {
+                if (!el.isJsonObject()) continue;
+                JsonObject g = el.getAsJsonObject();
+                String gName = getString(g, "name", "Group");
+                AutoParty.PartyGroup group = new AutoParty.PartyGroup(gName);
+                if (g.has("members") && g.get("members").isJsonArray()) {
+                    for (JsonElement m : g.getAsJsonArray("members")) {
+                        if (m.isJsonPrimitive()) group.members.add(m.getAsString());
+                    }
+                }
+                AutoParty.groups.add(group);
+            }
+        }
+        AutoParty.activeGroupIdx = getInt(obj, "autoPartyActiveGroup", AutoParty.groups.isEmpty() ? -1 : 0);
+        GroundItemsNotifier.watchedItems.clear();
+        if (obj.has("groundWatchedItems") && obj.get("groundWatchedItems").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("groundWatchedItems")) {
+                if (!el.isJsonObject()) continue;
+                JsonObject o = el.getAsJsonObject();
+                GroundItemsNotifier.WatchedItem item = new GroundItemsNotifier.WatchedItem();
+                item.enabled         = getBool(o,  "enabled",       true);
+                item.customKeyword   = getString(o, "customKeyword", "");
+                item.lineTracker     = getBool(o,  "lineTracker",    true);
+                item.screenNotifier  = getBool(o,  "screenNotifier", true);
+                item.highlight       = getBool(o,  "highlight",      true);
+                item.soundPing       = getBool(o,  "soundPing",      false);
+                item.soundConfig     = loadSoundConfig(o, "itemSound", item.soundConfig);
+                GroundItemsNotifier.watchedItems.add(item);
+            }
+        }
 
         QteTracker.qteLuckEnabled      = getBool(obj,  "qteLuckEnabled",      true);
-        QteTracker.qteExpEnabled       = getBool(obj,  "qteExpEnabled",       true);
+        QteTracker.qteExpEnabled       = getBool(obj,  "qteExpEnabled",       false);
         QteTracker.qteChanceEnabled    = getBool(obj,  "qteChanceEnabled",    true);
-        QteTracker.qteCoinsEnabled     = getBool(obj,  "qteCoinsEnabled",     true);
-        QteTracker.qteTickSkipEnabled  = getBool(obj,  "qteTickSkipEnabled",  true);
+        QteTracker.qteCoinsEnabled     = getBool(obj,  "qteCoinsEnabled",     false);
+        QteTracker.qteTickSkipEnabled  = getBool(obj,  "qteTickSkipEnabled",  false);
         ChatFilter.chatFilterEnabled                = getBool(obj,  "chatFilterEnabled",               false);
-        ChatFilter.filterManaMeteor                = getBool(obj,  "filterManaMeteor",                true);
+        ChatFilter.filterManaMeteor                = getBool(obj,  "filterManaMeteor",                false);
         ChatFilter.filterGuildChat                 = getBool(obj,  "filterGuildChat",                  false);
         InventorySearch.inventorySearchEnabled      = getBool(obj,  "inventorySearchEnabled",           true);
         if (obj.has("searchBarPosition")) {
@@ -114,19 +180,20 @@ public final class IslesPlusConfig {
         if (IslesClient.modOnlySoundsEnabled) {
             SoundController.setModOnlySoundsEnabled(true);
         }
+        rebuildModSoundsAllowlist();
     }
 
     public static void save() {
         JsonObject obj = new JsonObject();
         obj.addProperty("chatUpdatesEnabled",               IslesClient.chatUpdatesEnabled);
         obj.addProperty("modOnlySoundsEnabled",             IslesClient.modOnlySoundsEnabled);
-        obj.addProperty("inventoryFullNotifyEnabled",       InventoryNotifier.inventoryFullNotifyEnabled);
-        obj.addProperty("inventoryFullVolume",              InventoryNotifier.inventoryFullVolume);
-        obj.addProperty("dropNotifyEnabled",             DropNotifier.dropNotifyEnabled);
-        obj.addProperty("dropNotifyVolume",              DropNotifier.dropNotifyVolume);
-        obj.addProperty("depletionPingEnabled",          NodeAlertManager.depletionPingEnabled);
-        obj.addProperty("depletionPingVolume",           NodeAlertManager.depletionPingVolume);
-        obj.addProperty("regenPingVolume",               NodeAlertManager.regenPingVolume);
+        obj.addProperty("inventoryFullNotifyEnabled", InventoryNotifier.inventoryFullNotifyEnabled);
+        saveSoundConfig(obj, "inventoryFull", InventoryNotifier.soundConfig);
+        obj.addProperty("dropNotifyEnabled", DropNotifier.dropNotifyEnabled);
+        saveSoundConfig(obj, "dropNotify", DropNotifier.soundConfig);
+        obj.addProperty("depletionPingEnabled", NodeAlertManager.depletionPingEnabled);
+        saveSoundConfig(obj, "depletionPing", NodeAlertManager.depletionSoundConfig);
+        saveSoundConfig(obj, "regenPing", NodeAlertManager.regenSoundConfig);
         obj.addProperty("nodeRadiusEnabled",             NodeRadiusRenderer.nodeRadiusEnabled);
         obj.addProperty("regenPingMode",                 NodeAlertManager.regenPingMode.name());
         obj.addProperty("plushieFinderEnabled",          PlushieFinder.plushieFinderEnabled);
@@ -142,8 +209,46 @@ public final class IslesPlusConfig {
         obj.addProperty("vendingMachineFinderEnabled",   VendingMachineFinder.vendingMachineFinderEnabled);
         obj.addProperty("vendingMachineFinderGlowHue",   VendingMachineFinder.glowHue);
         obj.addProperty("rankCalculatorEnabled",         RankCalculator.rankCalculatorEnabled);
+        obj.addProperty("rankShowPlayerCount",           RankCalculator.showPlayerCount);
+        obj.addProperty("rankShowDropTimer",             RankCalculator.showRankDropTimer);
         obj.addProperty("harvestTimerEnabled",           HarvestTimer.harvestTimerEnabled);
         obj.addProperty("qteTrackerEnabled",    QteTracker.qteTrackerEnabled);
+        obj.addProperty("groundItemsNotifierEnabled", GroundItemsNotifier.groundItemsNotifierEnabled);
+        obj.addProperty("bossTrackerEnabled", BossTracker.bossTrackerEnabled);
+        obj.addProperty("bossAutoOpen",        BossTracker.autoOpenBossary);
+        obj.addProperty("bossHudPosition",     BossTracker.hudPosition.name());
+        JsonArray hiddenArr = new JsonArray();
+        for (String name : BossTracker.hiddenBossNames) hiddenArr.add(name);
+        obj.add("bossHiddenBosses", hiddenArr);
+        obj.addProperty("autoPartyEnabled",  AutoParty.enabled);
+        obj.addProperty("autoLeaveDisband",  AutoParty.autoLeaveDisband);
+        JsonArray partyFriendsArr = new JsonArray();
+        for (String f : AutoParty.friends) partyFriendsArr.add(f);
+        obj.add("autoPartyFriends", partyFriendsArr);
+        JsonArray groupsArr = new JsonArray();
+        for (AutoParty.PartyGroup group : AutoParty.groups) {
+            JsonObject g = new JsonObject();
+            g.addProperty("name", group.name);
+            JsonArray membersArr = new JsonArray();
+            for (String m : group.members) membersArr.add(m);
+            g.add("members", membersArr);
+            groupsArr.add(g);
+        }
+        obj.add("autoPartyGroups", groupsArr);
+        obj.addProperty("autoPartyActiveGroup", AutoParty.activeGroupIdx);
+        JsonArray watchedArr = new JsonArray();
+        for (GroundItemsNotifier.WatchedItem item : GroundItemsNotifier.watchedItems) {
+            JsonObject o = new JsonObject();
+            o.addProperty("enabled",        item.enabled);
+            o.addProperty("customKeyword",  item.customKeyword);
+            o.addProperty("lineTracker",    item.lineTracker);
+            o.addProperty("screenNotifier", item.screenNotifier);
+            o.addProperty("highlight",      item.highlight);
+            o.addProperty("soundPing",      item.soundPing);
+            saveSoundConfig(o, "itemSound", item.soundConfig);
+            watchedArr.add(o);
+        }
+        obj.add("groundWatchedItems", watchedArr);
 
         obj.addProperty("qteLuckEnabled",        QteTracker.qteLuckEnabled);
         obj.addProperty("qteExpEnabled",         QteTracker.qteExpEnabled);
@@ -163,6 +268,7 @@ public final class IslesPlusConfig {
         } catch (IOException e) {
             IslesLog.runtimeWarn("[Isles+] Failed to save config", e);
         }
+        rebuildModSoundsAllowlist();
     }
 
     private static JsonObject readJson(Path path) {
@@ -217,5 +323,48 @@ public final class IslesPlusConfig {
         if (!obj.has(key)) return defaultValue;
         JsonElement element = obj.get(key);
         return element.isJsonPrimitive() ? element.getAsInt() : defaultValue;
+    }
+
+    private static String getString(JsonObject obj, String key, String defaultValue) {
+        if (!obj.has(key)) return defaultValue;
+        JsonElement element = obj.get(key);
+        return element.isJsonPrimitive() ? element.getAsString() : defaultValue;
+    }
+
+    private static SoundConfig loadSoundConfig(JsonObject obj, String prefix, SoundConfig fallback) {
+        String soundId = getString(obj, prefix + "SoundId", fallback.soundId);
+        float  volume  = getFloat(obj,  prefix + "Volume",  fallback.volume);
+        float  pitch   = getFloat(obj,  prefix + "Pitch",   fallback.pitch);
+        return new SoundConfig(soundId, volume, pitch);
+    }
+
+    private static void saveSoundConfig(JsonObject obj, String prefix, SoundConfig config) {
+        obj.addProperty(prefix + "SoundId", config.soundId);
+        obj.addProperty(prefix + "Volume",  config.volume);
+        obj.addProperty(prefix + "Pitch",   config.pitch);
+    }
+
+    /**
+     * Rebuilds ModSounds' allowlist from the sounds that are actually configured
+     * on currently-enabled features. Only these exact sound IDs will pass through
+     * the Mod-only Sounds filter.
+     */
+    private static void rebuildModSoundsAllowlist() {
+        ArrayList<String> ids = new ArrayList<>();
+        if (InventoryNotifier.inventoryFullNotifyEnabled)
+            ids.add(InventoryNotifier.soundConfig.soundId);
+        if (DropNotifier.dropNotifyEnabled)
+            ids.add(DropNotifier.soundConfig.soundId);
+        if (NodeAlertManager.depletionPingEnabled)
+            ids.add(NodeAlertManager.depletionSoundConfig.soundId);
+        if (NodeAlertManager.regenPingMode != NodeAlertManager.RegenPingMode.OFF)
+            ids.add(NodeAlertManager.regenSoundConfig.soundId);
+        if (GroundItemsNotifier.groundItemsNotifierEnabled) {
+            for (GroundItemsNotifier.WatchedItem item : GroundItemsNotifier.watchedItems) {
+                if (item.enabled && item.soundPing)
+                    ids.add(item.soundConfig.soundId);
+            }
+        }
+        ModSounds.rebuildActiveSounds(ids);
     }
 }

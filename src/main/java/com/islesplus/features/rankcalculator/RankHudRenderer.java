@@ -36,26 +36,41 @@ public final class RankHudRenderer {
 
         context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, x, y, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE);
 
-        // Show countdown timer above the icon when at S rank
-        int secsLeft = RankCalculator.getSecondsUntilDemotion();
-        if (secsLeft >= 0 && client.textRenderer != null) {
-            String timer = String.format("%d:%02d", secsLeft / 60, secsLeft % 60);
-            int textWidth = client.textRenderer.getWidth(timer);
-            int textX = x + TEXTURE_SIZE / 2 - textWidth / 2;
-            int textY = y - client.textRenderer.fontHeight - 2;
-            int color = secsLeft > 60 ? 0xFFD4AF37 : secsLeft > 30 ? 0xFFFFAA00 : 0xFFE74C3C;
-            context.drawTextWithShadow(client.textRenderer, timer, textX, textY, color);
+        // Show player count above icon if enabled
+        int textLineY = y - client.textRenderer.fontHeight - 2;
+        if (RankCalculator.showPlayerCount) {
+            String pcLabel = RankCalculator.playerCount + " players";
+            int pcW = client.textRenderer.getWidth(pcLabel);
+            context.drawTextWithShadow(client.textRenderer, pcLabel,
+                x + TEXTURE_SIZE / 2 - pcW / 2, textLineY, 0xFF888888);
+            textLineY -= client.textRenderer.fontHeight + 2;
         }
 
-        // Show points needed for S rank when below S
+        // Show countdown timer above the icon when at S rank
+        int secsLeft = RankCalculator.getSecondsUntilDemotion();
+        if (secsLeft >= 0) {
+            String timer = String.format("%d:%02d", secsLeft / 60, secsLeft % 60);
+            int textWidth = client.textRenderer.getWidth(timer);
+            int color = secsLeft > 60 ? 0xFFD4AF37 : secsLeft > 30 ? 0xFFFFAA00 : 0xFFE74C3C;
+            context.drawTextWithShadow(client.textRenderer, timer,
+                x + TEXTURE_SIZE / 2 - textWidth / 2, textLineY, color);
+        }
+
+        // Show points needed for next rank when below S
+        String nextRank = RankCalculator.getNextRank();
         int ptsNeeded = RankCalculator.getPointsUntilPromotion();
-        if (client.textRenderer != null && !"S".equals(RankCalculator.lastRank) && !"--".equals(RankCalculator.lastRank)) {
-            String label = ptsNeeded >= 0 ? "+" + ptsNeeded + " pts for S" : "S no longer possible";
+        if (nextRank != null) {
+            String label = ptsNeeded >= 0 ? "+" + ptsNeeded + " pts for " + nextRank : nextRank + " no longer possible";
             int color = ptsNeeded >= 0 ? 0xFFD4AF37 : 0xFFE74C3C;
-            int textWidth = client.textRenderer.getWidth(label);
-            int textX = x + TEXTURE_SIZE / 2 - textWidth / 2;
-            int textY = y - client.textRenderer.fontHeight - 2;
-            context.drawTextWithShadow(client.textRenderer, label, textX, textY, color);
+            int dropSecs = RankCalculator.showRankDropTimer ? RankCalculator.getSecondsUntilRankDrop() : -1;
+            String timerStr = dropSecs >= 0 ? String.format(" %d:%02d", dropSecs / 60, dropSecs % 60) : "";
+            int totalW = client.textRenderer.getWidth(label) + client.textRenderer.getWidth(timerStr);
+            int startX = x + TEXTURE_SIZE / 2 - totalW / 2;
+            context.drawTextWithShadow(client.textRenderer, label, startX, textLineY, color);
+            if (!timerStr.isEmpty()) {
+                context.drawTextWithShadow(client.textRenderer, timerStr,
+                    startX + client.textRenderer.getWidth(label), textLineY, 0xFFE74C3C);
+            }
         }
     }
 

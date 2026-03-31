@@ -2,9 +2,15 @@ package com.islesplus.screen.islesscreen;
 
 import com.islesplus.IslesClient;
 import com.islesplus.IslesPlusConfig;
+import com.islesplus.features.grounditemsnotifier.GroundItemsCardRenderer;
+import com.islesplus.features.bosstracker.BossTrackerCardRenderer;
+import com.islesplus.features.autoparty.AutoPartyCardRenderer;
+import com.islesplus.sound.SoundConfig;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.input.CharInput;
+import net.minecraft.client.input.KeyInput;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
@@ -30,6 +36,9 @@ public class IslesScreen extends Screen {
     private boolean sliderDragging = false;
     private int dragSliderTrackX, dragSliderTrackWidth;
     private Consumer<Float> activeSliderConsumer = null;
+
+    // Scroll state
+    private int scrollOffset = 0;
 
     private int guiX, guiY, guiWidth, guiHeight;
     private int tabsX, tabsY, tabsWidth, tabsHeight;
@@ -57,7 +66,7 @@ public class IslesScreen extends Screen {
         this.contentX = this.guiX + 18;
         this.contentY = this.tabsY + this.tabsHeight + 12;
         this.contentWidth = this.guiWidth - 36;
-        this.contentHeight = this.guiHeight - 72;
+        this.contentHeight = this.guiHeight - 94;
     }
 
     @Override
@@ -74,26 +83,23 @@ public class IslesScreen extends Screen {
         drawFeatureCards(context, mouseX, mouseY);
         drawAuthorSignature(context);
 
+        // Overlays rendered on top of everything
+        SoundEditorOverlay.draw(context, this.textRenderer, this.width, this.height, mouseX, mouseY);
+
         super.render(context, mouseX, mouseY, delta);
     }
 
     private void drawAuthorSignature(DrawContext context) {
         String authorLabel = "by chrrisk & Scrolls";
-        int labelWidth = this.textRenderer.getWidth(authorLabel);
-        int baseX = this.guiX + this.guiWidth - 20 - Math.round(labelWidth * AUTHOR_TEXT_SCALE);
-        int baseY = this.guiY + this.guiHeight - 20 - Math.round(this.textRenderer.fontHeight * AUTHOR_TEXT_SCALE);
+        float scale = AUTHOR_TEXT_SCALE;
+        int labelWidth = (int)(this.textRenderer.getWidth(authorLabel) * scale);
+        int baseX = this.guiX + this.guiWidth - labelWidth - 6;
+        int baseY = this.guiY + 6;
         float hue = (Util.getMeasuringTimeMs() % 4000L) / 4000.0F;
         int authorTextColor = 0xFF000000 | MathHelper.hsvToRgb(hue, 1.0F, 1.0F);
         context.getMatrices().pushMatrix();
-        context.getMatrices().scale(AUTHOR_TEXT_SCALE, AUTHOR_TEXT_SCALE);
-        context.drawText(
-            this.textRenderer,
-            Text.literal(authorLabel),
-            Math.round(baseX / AUTHOR_TEXT_SCALE),
-            Math.round(baseY / AUTHOR_TEXT_SCALE),
-            authorTextColor,
-            false
-        );
+        context.getMatrices().scale(scale, scale);
+        context.drawText(this.textRenderer, Text.literal(authorLabel), (int)(baseX / scale), (int)(baseY / scale), authorTextColor, false);
         context.getMatrices().popMatrix();
     }
 
@@ -127,12 +133,15 @@ public class IslesScreen extends Screen {
 
         int[] rowHeights = computeRowHeights(activeCards, cardsPerRow);
 
+        int scissorBottom = Math.min(this.contentY + this.contentHeight, this.guiY + this.guiHeight - 18);
+        context.enableScissor(this.contentX, this.contentY, this.contentX + this.contentWidth, scissorBottom);
+
         for (int i = 0; i < activeCards.size(); i++) {
             FeatureCard card = activeCards.get(i);
             int row = i / cardsPerRow;
             int col = i % cardsPerRow;
             int x = this.contentX + col * (cardWidth + gap);
-            int y = this.contentY + rowY(rowHeights, row, gap);
+            int y = this.contentY + rowY(rowHeights, row, gap) - scrollOffset;
             if (card.controlType == FeatureCard.ControlType.EXPANDABLE) {
                 drawExpandableCard(context, card, x, y, cardWidth, mouseX, mouseY);
             } else {
@@ -140,6 +149,8 @@ public class IslesScreen extends Screen {
                 drawFeatureCard(context, card, x, y, cardWidth, cardHeight, hovered);
             }
         }
+
+        context.disableScissor();
     }
 
     private void drawExpandableCard(DrawContext context, FeatureCard card, int x, int y, int width, int mouseX, int mouseY) {
@@ -154,11 +165,8 @@ public class IslesScreen extends Screen {
 
         boolean enabled = !killed && card.enabledSupplier != null && card.enabledSupplier.getAsBoolean();
 
-        // Icon - same as regular cards, with enchant glint when enabled
         ItemStack icon = new ItemStack(card.iconSupplier.get());
-        if (enabled) {
-            icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
-        }
+        if (enabled) icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
         context.drawItem(icon, x + 10, y + 13);
 
         int textColor = killed ? TEXT_MUTED : TEXT_PRIMARY;
@@ -174,23 +182,46 @@ public class IslesScreen extends Screen {
             int dx = x + width - dw - 10;
             int dy = y + (44 - this.textRenderer.fontHeight) / 2;
             context.drawText(this.textRenderer, Text.literal(disabledText), dx, dy, 0xFFE74C3C, false);
+        } else if (card.isKeybindsCard) {
+            drawChevron(context, x + 5, y + 22, expanded, TEXT_MUTED);
         } else {
             int toggleW = 42, toggleH = 16;
             int tx = x + width - toggleW - 10;
             int ty = y + (44 - toggleH) / 2;
-
-            // Chevron - pixel-drawn triangle, in the left margin before the icon
             drawChevron(context, x + 5, y + 22, expanded, TEXT_MUTED);
-
             drawToggle(context, tx, ty, toggleW, toggleH, enabled);
         }
 
         if (!expanded) return;
 
         context.fill(x + 8, y + 44, x + width - 8, y + 45, BORDER);
-
         int bodyY = y + 44 + 6;
 
+        // Item list card — delegate entirely to GroundItemsCardRenderer
+        if (card.isItemListCard) {
+            GroundItemsCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
+            return;
+        }
+
+        // Boss list card — delegate to BossTrackerCardRenderer
+        if (card.isBossListCard) {
+            BossTrackerCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
+            return;
+        }
+
+        // Auto party card
+        if (card.isAutoPartyCard) {
+            AutoPartyCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
+            return;
+        }
+
+        // Keybinds card
+        if (card.isKeybindsCard) {
+            KeybindsCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
+            return;
+        }
+
+        // Standard expandable body
         if (card.expandOptions != null && card.optionSuppliers != null) {
             for (int i = 0; i < card.expandOptions.length; i++) {
                 int optY = bodyY + i * 18;
@@ -205,7 +236,21 @@ public class IslesScreen extends Screen {
 
         bodyY += 6;
 
-        if (card.sliderLabel != null && card.sliderSupplier != null) {
+        if (card.soundConfigSupplier != null) {
+            int midY = bodyY + 8;
+            context.drawText(this.textRenderer, Text.literal("Sound:"), x + 14, midY, TEXT_MUTED, false);
+            int labelW = this.textRenderer.getWidth("Sound:");
+            int btnX = x + 14 + labelW + 6;
+            int btnW = 80;
+            int btnY = midY - 3;
+            boolean btnHov = isInside(mouseX, mouseY, btnX, btnY, btnW, 14);
+            context.fill(btnX, btnY, btnX + btnW, btnY + 14, btnHov ? PANEL_HOVER : PANEL_SOFT);
+            context.fill(btnX, btnY, btnX + btnW, btnY + 1, BORDER);
+            String btnLabel = "Edit Sound";
+            context.drawText(this.textRenderer, Text.literal(btnLabel),
+                btnX + (btnW - this.textRenderer.getWidth(btnLabel)) / 2, btnY + 3, TEXT_PRIMARY, false);
+            bodyY += 22;
+        } else if (card.sliderLabel != null && card.sliderSupplier != null) {
             int midY = bodyY + 12;
             int labelW = this.textRenderer.getWidth(card.sliderLabel);
             context.drawText(this.textRenderer, Text.literal(card.sliderLabel), x + 14, midY - 4, TEXT_MUTED, false);
@@ -216,12 +261,10 @@ public class IslesScreen extends Screen {
             int knobX = trackX + (int)(card.sliderSupplier.get() * trackW);
 
             if (card.huePicker) {
-                // Rainbow hue strip
                 for (int px = 0; px < trackW; px += 2) {
                     int color = 0xFF000000 | MathHelper.hsvToRgb((float) px / trackW, 1.0f, 1.0f);
                     context.fill(trackX + px, midY - 5, Math.min(trackX + px + 2, trackEnd), midY + 5, color);
                 }
-                // Knob: black border + white inner
                 context.fill(knobX - 3, midY - 7, knobX + 3, midY + 7, 0xFF000000);
                 context.fill(knobX - 2, midY - 6, knobX + 2, midY + 6, 0xFFFFFFFF);
             } else {
@@ -248,9 +291,7 @@ public class IslesScreen extends Screen {
         context.fill(x, y + height - 1, x + width, y + height, BORDER);
 
         ItemStack icon = new ItemStack(card.iconSupplier.get());
-        if (enabled) {
-            icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
-        }
+        if (enabled) icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
         context.drawItem(icon, x + 10, y + 13);
 
         int textColor = killed ? TEXT_MUTED : TEXT_PRIMARY;
@@ -268,8 +309,7 @@ public class IslesScreen extends Screen {
             int dy = y + (height - this.textRenderer.fontHeight) / 2;
             context.drawText(this.textRenderer, Text.literal(disabledText), dx, dy, 0xFFE74C3C, false);
         } else {
-            int toggleW = 42;
-            int toggleH = 16;
+            int toggleW = 42, toggleH = 16;
             int tx = x + width - toggleW - 10;
             int ty = y + (height - toggleH) / 2;
             drawToggle(context, tx, ty, toggleW, toggleH, enabled);
@@ -277,36 +317,30 @@ public class IslesScreen extends Screen {
     }
 
     private void drawToggle(DrawContext context, int x, int y, int w, int h, boolean enabled) {
-        int track = enabled ? POSITIVE : 0xFF5B6678;
-        context.fill(x, y, x + w, y + h, track);
+        context.fill(x, y, x + w, y + h, enabled ? POSITIVE : 0xFF5B6678);
         int knobSize = h - 4;
         int knobX = enabled ? x + w - knobSize - 2 : x + 2;
         context.fill(knobX, y + 2, knobX + knobSize, y + 2 + knobSize, 0xFFFFFFFF);
     }
 
-    /** Pixel-drawn triangle chevron. {@code down=true} → ▼ (expanded), {@code down=false} → ▶ (collapsed). */
     private void drawChevron(DrawContext context, int cx, int cy, boolean down, int color) {
         if (down) {
-            // Down-pointing triangle, 7px wide, 4px tall
-            context.fill(cx - 3, cy - 1, cx + 4, cy,     color); // 7 wide
-            context.fill(cx - 2, cy,     cx + 3, cy + 1, color); // 5 wide
-            context.fill(cx - 1, cy + 1, cx + 2, cy + 2, color); // 3 wide
-            context.fill(cx,     cy + 2, cx + 1, cy + 3, color); // 1 wide (tip)
+            context.fill(cx - 3, cy - 1, cx + 4, cy,     color);
+            context.fill(cx - 2, cy,     cx + 3, cy + 1, color);
+            context.fill(cx - 1, cy + 1, cx + 2, cy + 2, color);
+            context.fill(cx,     cy + 2, cx + 1, cy + 3, color);
         } else {
-            // Right-pointing triangle, 4px wide, 7px tall
-            context.fill(cx - 1, cy - 3, cx,     cy + 4, color); // 7 tall
-            context.fill(cx,     cy - 2, cx + 1, cy + 3, color); // 5 tall
-            context.fill(cx + 1, cy - 1, cx + 2, cy + 2, color); // 3 tall
-            context.fill(cx + 2, cy,     cx + 3, cy + 1, color); // 1 tall (tip)
+            context.fill(cx - 1, cy - 3, cx,     cy + 4, color);
+            context.fill(cx,     cy - 2, cx + 1, cy + 3, color);
+            context.fill(cx + 1, cy - 1, cx + 2, cy + 2, color);
+            context.fill(cx + 2, cy,     cx + 3, cy + 1, color);
         }
     }
 
     private void drawCheckbox(DrawContext context, int x, int y, int size, boolean checked) {
         context.fill(x, y, x + size, y + size, BORDER);
         context.fill(x + 1, y + 1, x + size - 1, y + size - 1, PANEL_SOFT);
-        if (checked) {
-            context.fill(x + 2, y + 2, x + size - 2, y + size - 2, POSITIVE);
-        }
+        if (checked) context.fill(x + 2, y + 2, x + size - 2, y + size - 2, POSITIVE);
     }
 
     private int[] computeRowHeights(List<FeatureCard> activeCards, int cardsPerRow) {
@@ -329,12 +363,25 @@ public class IslesScreen extends Screen {
     }
 
     private int getExpandedCardHeight(FeatureCard card) {
-        int h = 44 + 6; // header + top body padding
+        if (card.isItemListCard) {
+            return 44 + 6 + GroundItemsCardRenderer.getExpandedHeight() + 8;
+        }
+        if (card.isBossListCard) {
+            return 44 + 6 + BossTrackerCardRenderer.getExpandedHeight() + 8;
+        }
+        if (card.isAutoPartyCard) {
+            return 44 + 6 + AutoPartyCardRenderer.getExpandedHeight() + 8;
+        }
+        if (card.isKeybindsCard) {
+            return 44 + 6 + KeybindsCardRenderer.getExpandedHeight() + 8;
+        }
+        int h = 44 + 6;
         if (card.expandOptions != null) h += card.expandOptions.length * 18;
-        h += 6; // padding before slider
-        if (card.sliderLabel != null) h += 24;
+        h += 6;
+        if (card.soundConfigSupplier != null) h += 22;
+        else if (card.sliderLabel != null) h += 24;
         if (card.legendLines != null) h += card.legendLines.length * 12;
-        h += 8; // bottom padding
+        h += 8;
         return h;
     }
 
@@ -347,6 +394,12 @@ public class IslesScreen extends Screen {
         int mouseX = (int) click.x();
         int mouseY = (int) click.y();
 
+        // Sound editor overlay captures all clicks when open
+        if (SoundEditorOverlay.isOpen()) {
+            SoundEditorOverlay.onClick(mouseX, mouseY);
+            return true;
+        }
+
         int tabCount = 3;
         int gap = 8;
         int tabWidth = (this.tabsWidth - gap * (tabCount - 1)) / tabCount;
@@ -355,6 +408,7 @@ public class IslesScreen extends Screen {
             int tabX = this.tabsX + i * (tabWidth + gap);
             if (isInside(mouseX, mouseY, tabX, this.tabsY, tabWidth, this.tabsHeight)) {
                 this.activeTab = tabs[i];
+                this.scrollOffset = 0;
                 IslesClient.playMenuClickSound();
                 return true;
             }
@@ -369,6 +423,9 @@ public class IslesScreen extends Screen {
     }
 
     private boolean onFeatureCardClicked(int mouseX, int mouseY) {
+        // Ignore clicks outside the content area
+        if (!isInside(mouseX, mouseY, this.contentX, this.contentY, this.contentWidth, this.contentHeight)) return false;
+
         int cardsPerRow = 2;
         int gap = 10;
         int cardWidth = (this.contentWidth - gap) / cardsPerRow;
@@ -382,27 +439,40 @@ public class IslesScreen extends Screen {
             int row = i / cardsPerRow;
             int col = i % cardsPerRow;
             int x = this.contentX + col * (cardWidth + gap);
-            int y = this.contentY + rowY(rowHeights, row, gap);
+            int y = this.contentY + rowY(rowHeights, row, gap) - scrollOffset;
 
             if (card.controlType == FeatureCard.ControlType.EXPANDABLE) {
                 boolean expanded = expandedCards.contains(card);
                 int h = expanded ? getExpandedCardHeight(card) : cardHeight;
                 if (!isInside(mouseX, mouseY, x, y, cardWidth, h)) continue;
 
-                if (card.isKilled()) return true; // consume click but do nothing
+                if (card.isKilled()) return true;
 
-                // Toggle button (always in header)
-                int toggleW = 42, toggleH = 16;
-                int tx = x + cardWidth - toggleW - 10;
-                int ty = y + (cardHeight - toggleH) / 2;
-                if (isInside(mouseX, mouseY, tx, ty, toggleW, toggleH)) {
-                    card.toggle();
-                    return true;
+                // Toggle button (not shown for keybinds card)
+                if (!card.isKeybindsCard) {
+                    int toggleW = 42, toggleH = 16;
+                    int tx = x + cardWidth - toggleW - 10;
+                    int ty = y + (cardHeight - toggleH) / 2;
+                    if (isInside(mouseX, mouseY, tx, ty, toggleW, toggleH)) {
+                        card.toggle();
+                        return true;
+                    }
                 }
 
-                // Body interactions (only when expanded and click is below header)
+                // Body interactions
                 if (expanded && mouseY >= y + cardHeight) {
                     int bodyY = y + cardHeight + 6;
+
+                    // Item list cards delegate all body clicks to GroundItemsCardRenderer
+                    if (card.isItemListCard) {
+                        return GroundItemsCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
+                    }
+                    if (card.isBossListCard) {
+                        return BossTrackerCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
+                    }
+                    if (card.isAutoPartyCard) {
+                        return AutoPartyCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
+                    }
 
                     if (card.expandOptions != null && card.optionTogglers != null) {
                         for (int j = 0; j < card.expandOptions.length; j++) {
@@ -419,7 +489,20 @@ public class IslesScreen extends Screen {
                     }
 
                     bodyY += 6;
-                    if (card.sliderLabel != null && card.sliderConsumer != null) {
+                    if (card.soundConfigSupplier != null) {
+                        int labelW = this.textRenderer.getWidth("Sound:");
+                        int btnX = x + 14 + labelW + 6;
+                        int btnY = bodyY + 5;
+                        if (isInside(mouseX, mouseY, btnX, btnY, 80, 14)) {
+                            SoundEditorOverlay.open(
+                                card.soundConfigSupplier,
+                                card.soundConfigSetter,
+                                card.defaultSoundConfig,
+                                IslesPlusConfig::save
+                            );
+                            return true;
+                        }
+                    } else if (card.sliderLabel != null && card.sliderConsumer != null) {
                         int midY = bodyY + 12;
                         int trackX = x + 14 + this.textRenderer.getWidth(card.sliderLabel) + 8;
                         int trackW = (x + cardWidth - 14) - trackX;
@@ -434,11 +517,17 @@ public class IslesScreen extends Screen {
                         }
                     }
 
-                    return true; // consumed - body click with no specific element
+                    return true; // consumed
                 }
 
-                // Header click (outside toggle) -> expand/collapse
-                if (expanded) expandedCards.remove(card); else expandedCards.add(card);
+                // Header click -> expand/collapse
+                if (expanded) {
+                    expandedCards.remove(card);
+                    GroundItemsCardRenderer.reset(); // clear input state when collapsing
+                    AutoPartyCardRenderer.reset();
+                } else {
+                    expandedCards.add(card);
+                }
                 return true;
             }
 
@@ -451,7 +540,24 @@ public class IslesScreen extends Screen {
     }
 
     @Override
+    public boolean charTyped(CharInput input) {
+        if (GroundItemsCardRenderer.onChar(input)) return true;
+        if (AutoPartyCardRenderer.onChar(input)) return true;
+        return super.charTyped(input);
+    }
+
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        if (GroundItemsCardRenderer.onKey(input)) return true;
+        if (AutoPartyCardRenderer.onKey(input)) return true;
+        return super.keyPressed(input);
+    }
+
+    @Override
     public boolean mouseDragged(Click click, double deltaX, double deltaY) {
+        if (SoundEditorOverlay.isOpen() && SoundEditorOverlay.onMouseDragged(click.x(), click.y())) {
+            return true;
+        }
         if (sliderDragging && activeSliderConsumer != null && dragSliderTrackWidth > 0) {
             float val = Math.max(0f, Math.min(1f, (float)(click.x() - dragSliderTrackX) / dragSliderTrackWidth));
             activeSliderConsumer.accept(val);
@@ -461,7 +567,28 @@ public class IslesScreen extends Screen {
     }
 
     @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        if (SoundEditorOverlay.isOpen()) return true;
+        int step = 20;
+        scrollOffset -= (int)(verticalAmount * step);
+        scrollOffset = Math.max(0, Math.min(scrollOffset, getMaxScroll()));
+        return true;
+    }
+
+    private int getMaxScroll() {
+        List<FeatureCard> activeCards = cards.getActiveCards(activeTab);
+        int cardsPerRow = 2;
+        int gap = 10;
+        int[] rowHeights = computeRowHeights(activeCards, cardsPerRow);
+        int totalH = 0;
+        for (int h : rowHeights) totalH += h + gap;
+        if (rowHeights.length > 0) totalH -= gap; // no trailing gap
+        return Math.max(0, totalH - contentHeight);
+    }
+
+    @Override
     public boolean mouseReleased(Click click) {
+        SoundEditorOverlay.onMouseReleased();
         if (activeSliderConsumer != null) {
             IslesPlusConfig.save();
         }
@@ -472,6 +599,9 @@ public class IslesScreen extends Screen {
 
     @Override
     public void close() {
+        GroundItemsCardRenderer.reset();
+        AutoPartyCardRenderer.reset();
+        SoundEditorOverlay.close();
         if (this.client != null) {
             this.client.setScreen(null);
         }

@@ -2,6 +2,7 @@ package com.islesplus.features.dropnotifier;
 
 import com.islesplus.IslesClient;
 import com.islesplus.sound.ModSounds;
+import com.islesplus.sound.SoundConfig;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 
@@ -17,7 +18,7 @@ public class DropNotifier {
 
     // public so IslesScreen (com.islesplus.screen) can read/write
     public static boolean dropNotifyEnabled = false;
-    public static float dropNotifyVolume = 0.5f;
+    public static SoundConfig soundConfig = new SoundConfig("minecraft:entity.ender_dragon.growl", 0.85f, 1.00f);
     private static long lastDropNotifyMs = 0L;
 
     public static void tick(MinecraftClient client) {
@@ -45,7 +46,7 @@ public class DropNotifier {
                 continue;
             }
 
-            ModSounds.playScaled(client, ModSounds.Cue.DROP_NOTIFY, dropNotifyVolume);
+            ModSounds.playConfig(client, soundConfig);
             lastDropNotifyMs = now;
             IslesClient.sendStatusMessage(client, "Drop notify: " + label);
             return;

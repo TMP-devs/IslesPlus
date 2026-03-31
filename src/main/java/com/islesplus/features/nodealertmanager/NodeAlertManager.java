@@ -2,6 +2,7 @@ package com.islesplus.features.nodealertmanager;
 
 import com.islesplus.IslesClient;
 import com.islesplus.sound.ModSounds;
+import com.islesplus.sound.SoundConfig;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.Util;
 
@@ -12,9 +13,9 @@ public class NodeAlertManager {
 
     // public so IslesScreen (com.islesplus.screen) can read/write
     public static boolean depletionPingEnabled = false;
-    public static float depletionPingVolume = 0.5f;
+    public static SoundConfig depletionSoundConfig = new SoundConfig("minecraft:block.note_block.bass", 0.85f, 0.60f);
     public static RegenPingMode regenPingMode = RegenPingMode.OFF;
-    public static float regenPingVolume = 0.5f;
+    public static SoundConfig regenSoundConfig = new SoundConfig("minecraft:block.note_block.bell", 1.00f, 1.00f);
     public static boolean regenReminderActive = false;
 
     private static ActiveSkillAlert activeSkillAlert = ActiveSkillAlert.NONE;
@@ -41,7 +42,7 @@ public class NodeAlertManager {
 
         long now = Util.getMeasuringTimeMs();
         if (now - activeSkillAlertLastSoundMs >= ALERT_REPEAT_MS) {
-            ModSounds.playScaled(client, ModSounds.Cue.NODE_ALERT, regenPingVolume);
+            ModSounds.playConfig(client, regenSoundConfig);
             activeSkillAlertLastSoundMs = now;
         }
 
@@ -67,7 +68,7 @@ public class NodeAlertManager {
 
         long now = Util.getMeasuringTimeMs();
         if (now - lastRegenReminderMs >= REGEN_REMINDER_REPEAT_MS) {
-            ModSounds.playScaled(client, ModSounds.Cue.NODE_ALERT, regenPingVolume);
+            ModSounds.playConfig(client, regenSoundConfig);
             lastRegenReminderMs = now;
         }
     }
@@ -77,7 +78,7 @@ public class NodeAlertManager {
             return;
         }
         if (alertType == ActiveSkillAlert.NODE_DEPLETED) {
-            ModSounds.playScaled(client, ModSounds.Cue.NODE_DEPLETED, depletionPingVolume);
+            ModSounds.playConfig(client, depletionSoundConfig);
             IslesClient.sendStatusMessage(client, "Node depleted detected.");
             return;
         }

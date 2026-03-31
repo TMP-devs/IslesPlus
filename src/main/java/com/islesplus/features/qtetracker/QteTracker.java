@@ -35,13 +35,13 @@ public final class QteTracker {
 
     public record TrackedQte(int entityId, QteType type, double textDisplayY) {}
 
-    public static boolean qteTrackerEnabled = false;
+    public static boolean qteTrackerEnabled = true;
 
     public static boolean qteLuckEnabled = true;
-    public static boolean qteExpEnabled = true;
+    public static boolean qteExpEnabled = false;
     public static boolean qteChanceEnabled = true;
-    public static boolean qteCoinsEnabled = true;
-    public static boolean qteTickSkipEnabled = true;
+    public static boolean qteCoinsEnabled = false;
+    public static boolean qteTickSkipEnabled = false;
 
     private static volatile List<TrackedQte> tracked = List.of();
     private static final Map<Integer, Long> qteFirstSeenMs = new HashMap<>();
