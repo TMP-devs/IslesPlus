@@ -20,15 +20,17 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Remote kill switch for public features.
- * Fetches features.json from GitHub. Fails open - if the fetch fails or the JSON is
- * invalid, all features are re-enabled (killed set is cleared).
+ * remote kill switch so we can turn features off for everyone if the server changes something.
+ * pulls features.json from github. fails open: if the fetch dies or the json is broken,
+ * nothing gets killed.
  *
- * Feature keys:
+ * feature keys:
  *   harvest_timer, node_radius, node_depleted_ping, regen_mode,
  *   drop_notify, inventory_full, vending_machine_finder, chest_finder,
  *   plushie_finder, button_finder, mob_finder, player_finder,
- *   rank_calculator, inventory_search, chat_filter
+ *   rank_calculator, inventory_search, chat_filter, waystone_finder,
+ *   qte_tracker (whole thing) plus per type: qte_tracker_luck, qte_tracker_exp,
+ *   qte_tracker_chance, qte_tracker_coins, qte_tracker_tickskip
  */
 public final class FeatureFlags {
     private static final String URL = "https://tmp-devs.github.io/islesplusjson/features.json";
@@ -36,20 +38,27 @@ public final class FeatureFlags {
     private static final Path CACHE_PATH = DATA_DIR.resolve("features_cache.json");
     private static final AtomicBoolean refreshInFlight = new AtomicBoolean(false);
 
-    /** Keys of features that are remotely disabled. Empty = all enabled (fail-open). */
+    /** feature keys that are currently killed. empty = everything allowed */
     private static volatile Set<String> killed = Collections.emptySet();
 
-    /** Optional message shown in chat on world join. Empty string = no message. */
+    /** message to show in chat on join, "" = nothing */
     private static volatile String motd = "";
 
-    /** Latest published mod version from remote. Empty string = unknown. */
+    /** One styled line of the join message, from "motd_v2" in features.json. {@code link},
+     * {@code linkText} and {@code color} ("#rrggbb") may be empty. */
+    public record MotdLine(String text, String link, String linkText, String color) {}
+
+    /** styled join lines; empty = fall back to the plain {@link #motd} string */
+    private static volatile java.util.List<MotdLine> motdLines = java.util.List.of();
+
+    /** newest mod version according to remote, "" = dunno */
     private static volatile String latestVersion = "";
-    /** Direct download URL for the latest version. Empty string = use default Modrinth page. */
+    /** direct download link for it, "" = just point at the modrinth page */
     private static volatile String latestVersionUrl = "";
 
     private FeatureFlags() {}
 
-    /** Dev-only bypass: when true, isKilled() always returns false (all features enabled). */
+    /** dev bypass, when true isKilled() is always false */
     public static volatile boolean devBypassKills = false;
 
     public static boolean isKilled(String key) {
@@ -58,6 +67,10 @@ public final class FeatureFlags {
 
     public static String getMotd() {
         return motd;
+    }
+
+    public static java.util.List<MotdLine> getMotdLines() {
+        return motdLines;
     }
 
     public static String getLatestVersion() {
@@ -73,6 +86,7 @@ public final class FeatureFlags {
         if (cached != null) {
             killed = cached.killed;
             motd = cached.motd;
+            motdLines = cached.motdLines;
             latestVersion = cached.latestVersion;
             latestVersionUrl = cached.latestVersionUrl;
         }
@@ -118,6 +132,7 @@ public final class FeatureFlags {
                 IslesLog.runtimeInfo("[Isles+] FeatureFlags: all features enabled (http status: " + status + ")");
                 killed = Collections.emptySet();
                 motd = "";
+                motdLines = java.util.List.of();
                 latestVersion = "";
                 latestVersionUrl = "";
                 return false;
@@ -127,6 +142,7 @@ public final class FeatureFlags {
             if (flags != null) {
                 killed = flags.killed;
                 motd = flags.motd;
+                motdLines = flags.motdLines;
                 latestVersion = flags.latestVersion;
                 latestVersionUrl = flags.latestVersionUrl;
                 writeFile(CACHE_PATH, json);
@@ -134,6 +150,7 @@ public final class FeatureFlags {
             } else {
                 killed = Collections.emptySet();
                 motd = "";
+                motdLines = java.util.List.of();
                 latestVersion = "";
                 latestVersionUrl = "";
                 return false;
@@ -142,13 +159,34 @@ public final class FeatureFlags {
             IslesLog.runtimeInfo("[Isles+] FeatureFlags: all features enabled (fetch failed: " + e.getMessage() + ")");
             killed = Collections.emptySet();
             motd = "";
+                motdLines = java.util.List.of();
             latestVersion = "";
             latestVersionUrl = "";
             return false;
         }
     }
 
-    private record ParsedFlags(Set<String> killed, String motd, String latestVersion, String latestVersionUrl) {}
+    private record ParsedFlags(Set<String> killed, String motd, java.util.List<MotdLine> motdLines, String latestVersion, String latestVersionUrl) {}
+
+    /** "motd_v2": one line object, or an array of them. Anything malformed is skipped. */
+    static java.util.List<MotdLine> parseMotdLines(JsonElement el) {
+        java.util.List<MotdLine> lines = new java.util.ArrayList<>();
+        if (el == null) return lines;
+        Iterable<JsonElement> items = el.isJsonArray() ? el.getAsJsonArray() : java.util.List.of(el);
+        for (JsonElement item : items) {
+            if (!item.isJsonObject()) continue;
+            JsonObject o = item.getAsJsonObject();
+            String text = str(o, "text");
+            if (text.isBlank()) continue;
+            lines.add(new MotdLine(text, str(o, "link"), str(o, "link_text"), str(o, "color")));
+        }
+        return java.util.List.copyOf(lines);
+    }
+
+    private static String str(JsonObject o, String key) {
+        JsonElement e = o.get(key);
+        return e != null && e.isJsonPrimitive() ? e.getAsString().trim() : "";
+    }
 
     private static ParsedFlags parseJson(String json) {
         if (json == null || json.isBlank()) return null;
@@ -186,7 +224,7 @@ public final class FeatureFlags {
                 }
             }
 
-            return new ParsedFlags(Collections.unmodifiableSet(killedKeys), parsedMotd, parsedLatestVersion, parsedLatestVersionUrl);
+            return new ParsedFlags(Collections.unmodifiableSet(killedKeys), parsedMotd, parseMotdLines(rootObj.get("motd_v2")), parsedLatestVersion, parsedLatestVersionUrl);
         } catch (Exception e) {
             IslesLog.runtimeWarn("[Isles+] FeatureFlags: failed to parse JSON", e);
             return null;

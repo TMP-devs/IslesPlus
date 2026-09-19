@@ -1,14 +1,16 @@
 package com.islesplus.features.inventorysearch;
 
-import net.minecraft.client.MinecraftClient;
+import com.islesplus.ui.Draw;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Theme;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.KeyInput;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Calculator dropdown panel toggled by the chevron next to the search bar.
- * Expression logic lives in {@link CalcExpression}.
+ * the calculator dropdown you get from the little chevron next to the search bar.
+ * this is just the UI, math is in {@link CalcExpression}
  */
 public final class InventoryCalculator {
 
@@ -77,7 +79,7 @@ public final class InventoryCalculator {
 
     // ---- Rendering ----
 
-    static void render(DrawContext ctx, MinecraftClient client, int barX, int barY, int screenW, int screenH) {
+    static void render(DrawContext ctx, int barX, int barY, int screenW, int screenH) {
         if (!open) return;
 
         int px = panelX(barX, screenW);
@@ -85,59 +87,69 @@ public final class InventoryCalculator {
         int pw = getPanelWidth();
         int ph = getPanelHeight();
 
-        // Panel border and background
-        ctx.fill(px - 1, py - 1, px + pw + 1, py + ph + 1, 0xFFCC7722);
-        ctx.fill(px, py, px + pw, py + ph, 0xFF1E1E1E);
+        // Panel frame
+        Draw.bevel4(ctx, px, py, pw, ph, Theme.CALC_FRAME, Theme.CALC_FRAME_LIT, Theme.CALC_FRAME_SHADE,
+                Theme.CALC_FRAME_LIT, Theme.CALC_FRAME_SHADE, Theme.INK);
 
         int innerX = px + PANEL_PAD;
         int curY = py + PANEL_PAD;
 
         // Expression display
         int displayW = pw - PANEL_PAD * 2;
-        ctx.fill(innerX, curY, innerX + displayW, curY + DISPLAY_H, 0xFF2A2A2A);
+        Draw.well(ctx, innerX, curY, displayW, DISPLAY_H, Theme.INK_DEEP);
 
-        // DEG/RAD indicator — top-left of display, clickable
+        // DEG/RAD indicator — small chip, top-left of display, clickable.
+        // Click rect in handleClick() is recomputed from this same Fonts.width(...) call.
         String modeLabel = radiansMode ? "RAD" : "DEG";
-        ctx.drawText(client.textRenderer, modeLabel, innerX + 3, curY + 2, radiansMode ? 0xFF88CC55 : 0xFF55AAFF, false);
+        int chipW = Fonts.width(modeLabel, Fonts.SMALL) + 4;
+        int chipX = innerX + 2, chipY = curY + 1, chipH = 9;
+        Draw.bevel(ctx, chipX, chipY, chipW, chipH, Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK_DEEP);
+        Fonts.draw(ctx, modeLabel, chipX + 2, chipY + 1, Theme.CREAM, Fonts.SMALL);
 
         String dText = CalcExpression.displayText.isEmpty() ? "0" : CalcExpression.displayText;
         String ghost = CalcExpression.getGhostParens();
-        int textW = client.textRenderer.getWidth(dText);
-        int ghostW = client.textRenderer.getWidth(ghost);
+        int textW = Fonts.width(dText);
+        int ghostW = Fonts.width(ghost);
         int totalW = textW + ghostW;
         int displayTextX = innerX + displayW - 4 - totalW;
-        int displayTextY = curY + (DISPLAY_H - client.textRenderer.fontHeight) / 2;
+        int displayTextY = curY + (DISPLAY_H - Fonts.GLYPH_H) / 2;
         ctx.enableScissor(innerX + 2, curY, innerX + displayW - 2, curY + DISPLAY_H);
-        ctx.drawText(client.textRenderer, dText, displayTextX, displayTextY, 0xFFFFFFFF, false);
+        Fonts.draw(ctx, dText, displayTextX, displayTextY, Theme.CREAM);
         if (!ghost.isEmpty()) {
-            ctx.drawText(client.textRenderer, ghost, displayTextX + textW, displayTextY, 0xFF666666, false);
+            Fonts.draw(ctx, ghost, displayTextX + textW, displayTextY, Theme.CALC_EXPR);
         }
         ctx.disableScissor();
         curY += DISPLAY_H + BTN_PAD;
 
         // All button rows
-        for (int r = 0; r < BUTTONS.length; r++) {
-            int bgColor = r < 2 ? 0xFF3A3A5A : 0xFF3A3A3A;
-            drawButtonRow(ctx, client, BUTTONS[r], innerX, curY, bgColor);
+        for (String[] row : BUTTONS) {
+            drawButtonRow(ctx, row, innerX, curY);
             curY += BTN_H + BTN_PAD;
         }
 
         // Wide = button
-        ctx.fill(innerX, curY, innerX + displayW, curY + BTN_H, 0xFF8B5A2B);
-        int eqW = client.textRenderer.getWidth("=");
-        ctx.drawText(client.textRenderer, "=", innerX + (displayW - eqW) / 2,
-                curY + (BTN_H - client.textRenderer.fontHeight) / 2, 0xFFFFFFFF, false);
+        Draw.bevel(ctx, innerX, curY, displayW, BTN_H, Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK);
+        int eqW = Fonts.width("=");
+        Fonts.draw(ctx, "=", innerX + (displayW - eqW) / 2, curY + (BTN_H - Fonts.GLYPH_H) / 2, Theme.CREAM);
     }
 
-    private static void drawButtonRow(DrawContext ctx, MinecraftClient client, String[] labels, int startX, int y, int bgColor) {
+    /** A DIGIT key is a single digit 0-9 or the decimal point; everything else in the grid is a FRAME key. */
+    private static boolean isDigitKey(String label) {
+        return (label.length() == 1 && Character.isDigit(label.charAt(0))) || label.equals(".");
+    }
+
+    private static void drawButtonRow(DrawContext ctx, String[] labels, int startX, int y) {
         int x = startX;
         for (String label : labels) {
-            String display = label;
-            ctx.fill(x, y, x + BTN_W, y + BTN_H, bgColor);
-            int tw = client.textRenderer.getWidth(display);
+            boolean digit = isDigitKey(label);
+            int fill = digit ? Theme.CALC_NUM : Theme.CALC_FRAME;
+            int lit = digit ? Theme.CALC_NUM_LIT : Theme.CALC_FRAME_LIT;
+            int shade = digit ? Theme.CALC_NUM_SHADE : Theme.CALC_FRAME_SHADE;
+            Draw.bevel(ctx, x, y, BTN_W, BTN_H, fill, lit, shade, Theme.INK);
+            int tw = Fonts.width(label);
             int tx = x + (BTN_W - tw) / 2;
-            int ty = y + (BTN_H - client.textRenderer.fontHeight) / 2;
-            ctx.drawText(client.textRenderer, display, tx, ty, 0xFFFFFFFF, false);
+            int ty = y + (BTN_H - Fonts.GLYPH_H) / 2;
+            Fonts.draw(ctx, label, tx, ty, Theme.TEXT_LABEL);
             x += BTN_W + BTN_PAD;
         }
     }
@@ -156,9 +168,11 @@ public final class InventoryCalculator {
 
         int innerX = px + PANEL_PAD;
 
-        // DEG/RAD indicator click (top-left of display)
-        int modeW = 18;
-        if (mx >= innerX + 2 && mx <= innerX + 2 + modeW && my >= py + PANEL_PAD + 1 && my <= py + PANEL_PAD + 10) {
+        // DEG/RAD indicator click (top-left of display) — same chip bounds as drawn in render()
+        String modeLabel = radiansMode ? "RAD" : "DEG";
+        int chipW = Fonts.width(modeLabel, Fonts.SMALL) + 4;
+        int chipH = 9;
+        if (mx >= innerX + 2 && mx <= innerX + 2 + chipW && my >= py + PANEL_PAD + 1 && my <= py + PANEL_PAD + 1 + chipH) {
             radiansMode = !radiansMode;
             return true;
         }

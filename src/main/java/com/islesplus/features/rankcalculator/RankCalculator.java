@@ -10,6 +10,7 @@ import net.minecraft.scoreboard.ScoreboardDisplaySlot;
 import net.minecraft.scoreboard.ScoreboardObjective;
 import net.minecraft.scoreboard.ScoreHolder;
 import net.minecraft.scoreboard.Team;
+import net.minecraft.util.Util;
 
 import java.util.Locale;
 import java.util.Map;
@@ -17,7 +18,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class RankCalculator {
-    public static boolean rankCalculatorEnabled = false;
+    public static boolean rankCalculatorEnabled = true;
     public static boolean showPlayerCount = false;
     public static boolean showRankDropTimer = false;
 
@@ -46,14 +47,39 @@ public final class RankCalculator {
     private static final Pattern CHESTS = Pattern.compile("\uD83C\uDF81\\s*(\\d+)/(\\d+)");
     private static final Pattern BOSS   = Pattern.compile("\uD83D\uDC51\\s*(\\d+)/(\\d+)");
 
-    // Grade thresholds (descending) and corresponding labels
-    private static final double[] THRESHOLDS = { 0.900, 0.775, 0.650, 0.525, 0.400, 0.275 };
-    private static final String[] GRADES     = { "S",   "A",   "B",   "C",   "D",   "E"   };
+    private static final double[] THRESHOLDS = RankGrades.THRESHOLDS;
+    private static final String[] GRADES     = RankGrades.GRADES;
+
+    // Server event, re-read for the whole rift: every tick for the first 5 seconds (the tab list can
+    // fill in after the sidebar), then every 5 seconds, so an event that starts or ends mid-rift is
+    // picked up. Rift Spelunker lowers the thresholds.
+    public static ActiveEvent activeEvent = ActiveEvent.NONE;
+    private static final int EVENT_SETTLE_TICKS = 100, EVENT_RECHECK_TICKS = 100;
+    private static int settleTicksLeft = 0;
+    private static int ticksUntilEventCheck = 0;
+    private static boolean spelunkerAnnouncedThisRift = false;
+
+    // Second source: the server's "CURRENT EVENT: ..." chat broadcast. Remembered across worlds
+    // (it is usually seen in the hub before entering a rift) and used when the tab list names nothing.
+    private static ActiveEvent announcedEvent = ActiveEvent.NONE;
+    private static long announcedAtMs = 0L;
 
     private RankCalculator() {}
 
+    private static boolean wasInRift = false;
+
     public static void tick(MinecraftClient client, EntityScanResult scan) {
         if (client.world == null) return;
+
+        // A second rift can start without a new server connection (which is what calls reset()):
+        // entering one always re-arms the quick event read and the once-per-rift Spelunker notice.
+        boolean inRift = WorldIdentification.world == PlayerWorld.RIFT;
+        if (inRift && !wasInRift) {
+            settleTicksLeft = EVENT_SETTLE_TICKS;
+            ticksUntilEventCheck = 0;
+            spelunkerAnnouncedThisRift = false;
+        }
+        wasInRift = inRift;
 
         // Track max players seen - never drops down
         if (WorldIdentification.world == PlayerWorld.RIFT) {
@@ -65,8 +91,34 @@ public final class RankCalculator {
             return;
         }
 
+        detectActiveEvent(client);
         parseScoreboard(client);
         lastRank = calculateRank();
+    }
+
+    /** Every system chat line comes through here so the event broadcast is never missed. */
+    public static void onChatMessage(String text) {
+        ActiveEvent announced = ActiveEvent.fromAnnouncement(text);
+        if (announced == null) return;
+        announcedEvent = announced;
+        announcedAtMs = Util.getMeasuringTimeMs();
+        // Never applied directly: the next check re-resolves, and there the tab list still wins.
+        ticksUntilEventCheck = 0;
+    }
+
+    private static void detectActiveEvent(MinecraftClient client) {
+        if (ticksUntilEventCheck-- > 0) return;
+        ActiveEvent fromTab = ActiveEvent.detect(TabListReader.lines(client));
+        activeEvent = ActiveEvent.resolve(fromTab, announcedEvent, Util.getMeasuringTimeMs() - announcedAtMs);
+
+        boolean settling = settleTicksLeft > 0 && fromTab == ActiveEvent.NONE;
+        if (settleTicksLeft > 0) settleTicksLeft--;
+        ticksUntilEventCheck = settling ? 0 : EVENT_RECHECK_TICKS;
+
+        if (activeEvent == ActiveEvent.RIFT_SPELUNKER && !spelunkerAnnouncedThisRift) {
+            spelunkerAnnouncedThisRift = true;
+            IslesClient.sendAlwaysMessage(client, "Rift Spelunker active - grades need 10% less score.");
+        }
     }
 
     private static void parseScoreboard(MinecraftClient client) {
@@ -77,27 +129,32 @@ public final class RankCalculator {
         for (ScoreHolder holder : scoreboard.getKnownScoreHolders()) {
             if (scoreboard.getScore(holder, sidebar) == null) continue;
             String text = getDisplayText(scoreboard, holder);
+            // Any capture that overflows an int (server sent a garbage value, e.g. an
+            // uninitialized timer right after joining a rift) yields null and the line
+            // is skipped, keeping the previous tick's values.
             Matcher m;
+            int[] v;
             if ((m = RIFT_TIME.matcher(text)).find()) {
-                currentTimeSecs = Integer.parseInt(m.group(1)) * 60 + Integer.parseInt(m.group(2));
-                currentPoints   = Integer.parseInt(m.group(3));
-                totalPoints     = Integer.parseInt(m.group(4));
+                if ((v = ScoreboardNumbers.parseGroups(m)) == null) continue;
+                currentTimeSecs = v[0] * 60 + v[1];
+                currentPoints   = v[2];
+                totalPoints     = v[3];
                 if (totalTimeSecs == 0 && totalPoints > 0) {
                     totalTimeSecs = resolveTotal(client);
                 }
             } else {
                 // Kills, chests, and boss may all appear on the same scoreboard line
-                if ((m = KILLS.matcher(text)).find()) {
-                    currentKills = Integer.parseInt(m.group(1));
-                    totalKills   = Integer.parseInt(m.group(2));
+                if ((m = KILLS.matcher(text)).find() && (v = ScoreboardNumbers.parseGroups(m)) != null) {
+                    currentKills = v[0];
+                    totalKills   = v[1];
                 }
-                if ((m = CHESTS.matcher(text)).find()) {
-                    currentChests = Integer.parseInt(m.group(1));
-                    totalChests   = Integer.parseInt(m.group(2));
+                if ((m = CHESTS.matcher(text)).find() && (v = ScoreboardNumbers.parseGroups(m)) != null) {
+                    currentChests = v[0];
+                    totalChests   = v[1];
                 }
-                if ((m = BOSS.matcher(text)).find()) {
-                    currentBoss = Integer.parseInt(m.group(1));
-                    totalBoss   = Integer.parseInt(m.group(2));
+                if ((m = BOSS.matcher(text)).find() && (v = ScoreboardNumbers.parseGroups(m)) != null) {
+                    currentBoss = v[0];
+                    totalBoss   = v[1];
                 }
             }
         }
@@ -121,12 +178,7 @@ public final class RankCalculator {
         double t = (double) currentTimeSecs / totalTimeSecs;
 
         double rawScore = (s * 4.0 + t * 1.0) / 5.0;
-        double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
-
-        for (int i = 0; i < THRESHOLDS.length; i++) {
-            if (rawScore > THRESHOLDS[i] * m) return GRADES[i];
-        }
-        return "F";
+        return RankGrades.grade(rawScore, RankGrades.multiplier(playerCount, activeEvent));
     }
 
     public static void logState(MinecraftClient client) {
@@ -135,9 +187,9 @@ public final class RankCalculator {
         double s        = totalPoints   > 0 ? (double) currentPoints   / totalPoints   : 0.0;
         double t        = totalTimeSecs > 0 ? (double) currentTimeSecs / totalTimeSecs : 0.0;
         double rawScore = (s * 4.0 + t * 1.0) / 5.0;
-        double m        = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
+        double m        = RankGrades.multiplier(playerCount, activeEvent);
 
-        send(client, String.format("[RankCalc] players=%d", playerCount));
+        send(client, String.format("[RankCalc] players=%d event=%s", playerCount, activeEvent));
         send(client, String.format("[RankCalc] time=%d/%ds  pts=%d/%d  kills=%d/%d  chests=%d/%d  boss=%d/%d",
             currentTimeSecs, totalTimeSecs,
             currentPoints, totalPoints,
@@ -161,15 +213,15 @@ public final class RankCalculator {
     }
 
     /**
-     * When rank is S, returns the seconds remaining until score drops to A.
-     * Returns -1 if not S, or if enough points that time alone can't demote.
+     * at S rank, how many seconds until we drop to A.
+     * -1 if not S or if we have enough points that time alone can't demote us
      */
     public static int getSecondsUntilDemotion() {
         if (totalTimeSecs == 0 || totalPoints == 0) return -1;
         if (!"S".equals(lastRank)) return -1;
 
         double s = (double) currentPoints / totalPoints;
-        double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
+        double m = RankGrades.multiplier(playerCount, activeEvent);
 
         // S threshold: rawScore > THRESHOLDS[0] * m
         // rawScore = (s * 4.0 + t * 1.0) / 5.0
@@ -183,9 +235,7 @@ public final class RankCalculator {
         return Math.max(0, currentTimeSecs - timeSecsAtThreshold);
     }
 
-    /**
-     * Returns the name of the next rank above the current one, or null if already S or no data.
-     */
+    /** next rank up, null if already S or no data yet */
     public static String getNextRank() {
         if ("S".equals(lastRank) || "--".equals(lastRank)) return null;
         for (int i = 0; i < GRADES.length; i++) {
@@ -195,8 +245,8 @@ public final class RankCalculator {
     }
 
     /**
-     * Returns points needed to reach the next rank above current.
-     * Returns -1 if already S, data not ready, or next rank is impossible at current time.
+     * points needed to hit the next rank.
+     * -1 if already S, no data, or it's mathematically not happening at the current time
      */
     public static int getPointsUntilPromotion() {
         if (totalTimeSecs == 0 || totalPoints == 0) return -1;
@@ -210,7 +260,7 @@ public final class RankCalculator {
         if (thresholdIdx < 0) thresholdIdx = THRESHOLDS.length - 1; // F rank -> need to cross E threshold
 
         double t = (double) currentTimeSecs / totalTimeSecs;
-        double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
+        double m = RankGrades.multiplier(playerCount, activeEvent);
 
         // rawScore = (s * 4.0 + t) / 5.0 > THRESHOLDS[thresholdIdx] * m
         // => s > (5.0 * threshold * m - t) / 4.0
@@ -224,8 +274,8 @@ public final class RankCalculator {
     }
 
     /**
-     * For non-S ranks: seconds until current rank drops to the one below.
-     * Returns -1 if not applicable, rank is safe, or data not ready.
+     * for anything below S: seconds until we drop a rank.
+     * -1 if it doesn't apply, we're safe, or no data
      */
     public static int getSecondsUntilRankDrop() {
         if (totalTimeSecs == 0 || totalPoints == 0) return -1;
@@ -238,11 +288,11 @@ public final class RankCalculator {
         if (thresholdIdx < 0) return -1;
 
         double s = (double) currentPoints / totalPoints;
-        double m = Math.min(1.0, 0.75 + (1.0 / 12.0) * playerCount);
+        double m = RankGrades.multiplier(playerCount, activeEvent);
 
         // Solve for t where rawScore == THRESHOLDS[thresholdIdx] * m
         double tThreshold = 5.0 * THRESHOLDS[thresholdIdx] * m - s * 4.0;
-        if (tThreshold <= 0) return -1; // points are high enough — can't drop
+        if (tThreshold <= 0) return -1; // enough points, can't drop
 
         int timeSecsAtThreshold = (int) Math.ceil(tThreshold * totalTimeSecs);
         return Math.max(0, currentTimeSecs - timeSecsAtThreshold);
@@ -272,5 +322,10 @@ public final class RankCalculator {
         currentBoss = 0;
         totalBoss = 0;
         lastRank = "--";
+        activeEvent = ActiveEvent.NONE;
+        settleTicksLeft = EVENT_SETTLE_TICKS;
+        ticksUntilEventCheck = 0;
+        spelunkerAnnouncedThisRift = false;
+        wasInRift = false;
     }
 }

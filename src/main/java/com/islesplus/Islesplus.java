@@ -7,6 +7,6 @@ public class Islesplus implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
-		// Mod initialization hook.
+		// nothing server side, everything lives in IslesClient
 	}
 }

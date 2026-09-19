@@ -1,20 +1,16 @@
 package com.islesplus.features.plushiefinder;
 
 import com.islesplus.features.rankcalculator.RiftRepository;
+import com.islesplus.render.WorldTagRenderer;
 import com.islesplus.sync.FeatureFlags;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.Camera;
-import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
-import net.minecraft.util.math.MathHelper;
-import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
-import org.joml.Matrix4f;
 
 public final class PlushieWaypointRenderer {
     // Plushie: white text on dark pink
@@ -23,7 +19,6 @@ public final class PlushieWaypointRenderer {
     // Entrance: white text on dark blue
     private static final int E_TEXT = 0xFFFFFFFF;
     private static final int E_BG = 0xCC1A4A8B;
-    private static final double MAX_TAG_RENDER_DISTANCE = 160.0;
 
     private PlushieWaypointRenderer() {}
 
@@ -49,11 +44,21 @@ public final class PlushieWaypointRenderer {
         PlushieEntry closest = PlushieRepository.getClosestUnowned(camPos);
         if (closest == null) return;
 
-        drawTag(client, matrices, camPos, yaw, pitch,
+        // range limit applies after picking the nearest, so it's still "nearest or nothing"
+        if (PlushieFinder.maxDistance > 0) {
+            double d = distSq(camPos, closest.xReal, closest.yReal, closest.zReal);
+            if (closest.hasEntrance()) {
+                d = Math.min(d, distSq(camPos, closest.xEntrance, closest.yEntrance, closest.zEntrance));
+            }
+            double max = PlushieFinder.maxDistance;
+            if (d > max * max) return;
+        }
+
+        WorldTagRenderer.drawTag(client, matrices, camPos, yaw, pitch,
             closest.xReal, closest.yReal + 0.5, closest.zReal,
             "#" + closest.num, P_TEXT, P_BG, 0.75f, consumers);
         if (closest.hasEntrance()) {
-            drawTag(client, matrices, camPos, yaw, pitch,
+            WorldTagRenderer.drawTag(client, matrices, camPos, yaw, pitch,
                 closest.xEntrance, closest.yEntrance + 0.5, closest.zEntrance,
                 "#" + closest.num + " entrance", E_TEXT, E_BG, 0.5f, consumers);
         }
@@ -63,44 +68,10 @@ public final class PlushieWaypointRenderer {
         }
     }
 
-    // Billboard using separate Y/X Euler rotations.
-    private static void applyBillboard(MatrixStack matrices, float yaw, float pitch) {
-        matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-yaw));
-        matrices.multiply(RotationAxis.POSITIVE_X.rotationDegrees(pitch));
-    }
-
-    private static void drawTag(MinecraftClient client, MatrixStack matrices, Vec3d camPos,
-                                float yaw, float pitch,
-                                double wx, double wy, double wz,
-                                String text, int textColor, int bgColor,
-                                float scaleMult, VertexConsumerProvider consumers) {
-        double dx = wx - camPos.x;
-        double dy = wy - camPos.y;
-        double dz = wz - camPos.z;
-        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < 1e-6) return;
-
-        if (dist > MAX_TAG_RENDER_DISTANCE) {
-            double s = MAX_TAG_RENDER_DISTANCE / dist;
-            dx *= s;
-            dy *= s;
-            dz *= s;
-        }
-
-        // VoxelMap formula (dist*0.1+1)*constant; keep larger readable tags.
-        float scale = (float) (dist * 0.1 + 1.0) * 0.045f * scaleMult;
-        // Keep far labels readable, but bounded so they do not explode in size.
-        scale = MathHelper.clamp(scale, 0.08f * scaleMult, 1.5f * scaleMult);
-
-        matrices.push();
-        matrices.translate(dx, dy, dz);
-        applyBillboard(matrices, yaw, pitch);
-        matrices.scale(-scale, -scale, -scale);
-        Matrix4f matrix = matrices.peek().getPositionMatrix();
-        int w = client.textRenderer.getWidth(text);
-        client.textRenderer.draw(text, -w / 2.0f, 0, textColor, false, matrix,
-            consumers, TextRenderer.TextLayerType.SEE_THROUGH, bgColor,
-            LightmapTextureManager.MAX_LIGHT_COORDINATE);
-        matrices.pop();
+    private static double distSq(Vec3d from, double x, double y, double z) {
+        double dx = x - from.x;
+        double dy = y - from.y;
+        double dz = z - from.z;
+        return dx * dx + dy * dy + dz * dz;
     }
 }

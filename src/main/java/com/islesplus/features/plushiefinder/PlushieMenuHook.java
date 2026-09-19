@@ -19,11 +19,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class PlushieMenuHook {
-    /** Matches "Plushy #5", "Plushie #5", "Plushy 5", etc. */
+    /** "Plushy #5", "Plushie #5", "Plushy 5", all of it */
     private static final Pattern PLUSHIE_NUM =
         Pattern.compile("(?i)plush(?:y|ie?)\\s*#?(\\d+)");
 
-    // Reset each time a new HandledScreen opens; prevents re-syncing every frame.
+    // reset when a new screen opens so we only sync once per menu, not every frame
     private static boolean syncedThisScreen = false;
 
     private PlushieMenuHook() {}
@@ -40,9 +40,9 @@ public final class PlushieMenuHook {
     // -------------------------------------------------------------------------
 
     /**
-     * Called every frame while a HandledScreen is open.
-     * On the first frame we detect plushie items (items arrive after screen open),
-     * we sync ownership and then draw the overlay on every frame after that.
+     * runs every frame while a menu is open. items show up a frame or two after the screen
+     * does, so the first frame we actually see plushies we sync ownership, then just draw
+     * the overlay from there on
      */
     private static void onRender(net.minecraft.client.gui.screen.Screen screen, DrawContext ctx, int screenHeight) {
         if (!(screen instanceof HandledScreen<?> hs)) return;
@@ -57,10 +57,7 @@ public final class PlushieMenuHook {
         drawOverlay(ctx, hs, screenHeight);
     }
 
-    /**
-     * Returns true if any slot in the screen contains an item whose name
-     * matches the plushie number pattern (e.g. "✔ Plushy #3").
-     */
+    /** does any slot have something named like "✔ Plushy #3" */
     private static boolean hasPlushieItems(HandledScreen<?> screen) {
         ScreenHandler handler = ((HandledScreenAccessor) screen).getHandler();
         for (Slot slot : handler.slots) {
@@ -72,8 +69,8 @@ public final class PlushieMenuHook {
     }
 
     /**
-     * Scan every non-empty slot. For each item whose name matches the plushie
-     * number pattern, determine owned status from item type and update PlushieRepository.
+     * go through every slot, for each plushie item work out owned/not from the item type
+     * (paper = owned, ghast tear = not) and push that into PlushieRepository
      */
     private static void syncFromScreen(HandledScreen<?> screen) {
         ScreenHandler handler = ((HandledScreenAccessor) screen).getHandler();
@@ -98,7 +95,7 @@ public final class PlushieMenuHook {
         PlushieRepository.setOwnedBatch(updates);
     }
 
-    /** Small overlay drawn on the left-center of the screen. */
+    /** the little "x / y found" text above the menu */
     private static void drawOverlay(DrawContext ctx, HandledScreen<?> screen, int screenHeight) {
         List<PlushieEntry> plushies = PlushieRepository.getCachedPlushies();
         if (plushies.isEmpty()) return;
@@ -116,11 +113,11 @@ public final class PlushieMenuHook {
         int guiY = acc.getGuiY();
         int guiW = acc.getGuiWidth();
 
-        // Center above the open handled UI, with a small top gap.
+        // centered above the menu with a bit of a gap
         int ox = guiX + (guiW - tw) / 2;
         int oy = guiY - tr.fontHeight - 6;
 
-        // Keep visible even if a UI is very close to the top edge.
+        // don't let it go off the top of the screen on tall menus
         oy = Math.max(2, oy);
 
         ctx.fill(ox - 3, oy - 2, ox + tw + 3, oy + tr.fontHeight + 2, 0xBB141414);

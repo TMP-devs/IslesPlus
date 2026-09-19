@@ -64,7 +64,7 @@ public final class IslesLog {
             Files.writeString(path, line + System.lineSeparator(),
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException ignored) {
-            // Logging failures are intentionally swallowed.
+            // if logging itself breaks there's nowhere to log it lol
         }
     }
 

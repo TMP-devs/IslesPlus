@@ -1,6 +1,7 @@
 package com.islesplus.features.chestfinder;
 
 import com.islesplus.entity.EntityScanResult;
+import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.minecraft.client.MinecraftClient;
@@ -18,10 +19,16 @@ import java.util.Set;
 public final class ChestFinder {
     public static boolean chestFinderEnabled = false;
     public static float glowHue = 0.128f; // gold
+    public static float glowSaturation = 1.0f;
+    public static float glowLightness = 0.5f;
     private static final Map<Integer, Boolean> modelCache = new HashMap<>();
     private static volatile Set<Integer> glowingEntityIds = Set.of();
 
     private ChestFinder() {
+    }
+
+    public static int glowRgb() {
+        return GlowColor.rgb(glowHue, glowSaturation, glowLightness);
     }
 
     public static void tick(MinecraftClient client, EntityScanResult scan) {

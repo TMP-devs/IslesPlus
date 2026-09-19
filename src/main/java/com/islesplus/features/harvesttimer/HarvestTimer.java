@@ -28,6 +28,18 @@ public final class HarvestTimer {
     private static long referenceTimeMs = 0;
     // Formatted time string, or null if nothing to show
     private static String formattedTime = null;
+    // Text colour (RGB) for the current time: lime when the node is full, through gold, to red
+    public static final int LIME = 0x8FD14F, GOLD = 0xF2BC3C, RED = 0xE05341;
+    private static int timeColor = LIME;
+
+    /** Harvest Timer mockup: lime while more than half the node's time is left, gold down to a
+     * quarter, alert red for the last quarter. {@code fullSecs} is how long the node takes from
+     * its fullest count. */
+    public static int colorFor(double remainingSecs, double fullSecs) {
+        if (fullSecs <= 0) return RED;
+        double f = remainingSecs / fullSecs;
+        return f > 0.5 ? LIME : f > 0.25 ? GOLD : RED;
+    }
 
     public static void onMessage(String text) {
         if (!harvestTimerEnabled) return;
@@ -82,7 +94,9 @@ public final class HarvestTimer {
         int remainingSecsInt = (int) Math.ceil(remaining);
         int minutes = remainingSecsInt / 60;
         int seconds = remainingSecsInt % 60;
-        formattedTime = String.format("%d:%02d", minutes, seconds);
+        // "~": it is an estimate - other players hitting the node shorten it
+        formattedTime = String.format("~%d:%02d", minutes, seconds);
+        timeColor = colorFor(remaining, (double) lastGatheringInterval * Math.max(count, node.peakCount) / 20.0);
     }
 
     private static void clearDisplay() {
@@ -93,6 +107,11 @@ public final class HarvestTimer {
 
     public static String getFormattedTime() {
         return formattedTime;
+    }
+
+    /** RGB for the current time, green at a full node down to red as it empties. */
+    public static int getTimeColor() {
+        return timeColor;
     }
 
     public static UUID getTrackedNodeUuid() {

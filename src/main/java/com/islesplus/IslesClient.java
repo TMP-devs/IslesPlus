@@ -29,6 +29,8 @@ import com.islesplus.features.qtetracker.QteRenderer;
 import com.islesplus.features.secretfinder.SecretBlockRenderer;
 import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
+import com.islesplus.features.waystonefinder.WaystoneFinder;
+import com.islesplus.features.waystonefinder.WaystoneTagRenderer;
 import com.islesplus.features.plushiefinder.PlushieMenuHook;
 import com.islesplus.features.plushiefinder.PlushieRepository;
 import com.islesplus.features.plushiefinder.PlushieStatusHudRenderer;
@@ -39,12 +41,15 @@ import com.islesplus.features.bosstracker.BossTimerHud;
 import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.resourcevault.ResourceVaultOpener;
 import com.islesplus.features.slotlocker.SlotLocker;
+import com.islesplus.features.superjump.SuperJump;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.mixin.HandledScreenAccessor;
 import com.islesplus.screen.islesscreen.IslesScreen;
 import com.islesplus.sound.SoundController;
 import com.islesplus.sound.ModSounds;
 import com.islesplus.sync.FeatureFlags;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Theme;
 import com.islesplus.sync.RefreshPoller;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
@@ -73,6 +78,7 @@ import net.minecraft.util.Identifier;
 import org.lwjgl.glfw.GLFW;
 
 import java.net.URI;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -80,10 +86,12 @@ public class IslesClient implements ClientModInitializer {
     private static final KeyBinding.Category KEYBIND_CATEGORY_ISLESPLUS = KeyBinding.Category.create(
         Identifier.of("islesplus", "a_islesplus")
     );
-    static final int   BRAND_DARK   = 0x390214;
-    static final int   ACCENT_GOLD  = 0xD4AF37;
-    static final int   STATUS_GREEN = 0x2ECC71;
-    static final int   STATUS_RED   = 0xE74C3C;
+    // Chat palette, from the MOTD mockup. Every line is one colour throughout (diamond, text, arrow,
+    // link): cream for ordinary lines, the MOTD's own accent, lifted oxblood for "update available".
+    static final int   CHAT_TEXT   = Theme.WELL_ROW_TEXT & 0xFFFFFF;   // cream #e8ddc6
+    static final int   CHAT_BRAND  = Theme.HUD_TITLE     & 0xFFFFFF;   // lifted oxblood: wordmark, update line
+    static final int   CHAT_PLUS   = Theme.RAISED        & 0xFFFFFF;   // tan plus
+    static final int   CHAT_ACCENT = Theme.HUD_VERDIGRIS & 0xFFFFFF;   // default MOTD colour
     static final float ALERT_VOLUME = 2.0F;
     static final float ALERT_PITCH  = 1.0F;
 
@@ -129,10 +137,16 @@ public class IslesClient implements ClientModInitializer {
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
+    public static final KeyBinding SUPER_JUMP_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        "key.islesplus.super_jump",
+        InputUtil.Type.KEYSYM,
+        GLFW.GLFW_KEY_UNKNOWN,
+        KEYBIND_CATEGORY_ISLESPLUS
+    ));
 
     public static boolean chatUpdatesEnabled = false;
     public static boolean modOnlySoundsEnabled = false;
-    /** True while connecting via the "Join Skyblock Isles" title screen button; lets ConfirmScreenMixin auto-accept the resource pack. */
+    /** true while joining through our title screen button, ConfirmScreenMixin uses it to auto accept the resource pack */
     public static volatile boolean connectingToIsles = false;
     public static boolean lockSlotKeyHeld = false;
 
@@ -144,8 +158,8 @@ public class IslesClient implements ClientModInitializer {
         NodeRepository.init();
         FeatureFlags.init();
 
-        // Must register before the main BEFORE_INIT block so its allowKeyPress
-        // handler runs first and can consume character keys when focused.
+        // has to go before the main BEFORE_INIT block so its allowKeyPress
+        // runs first and can eat character keys while the search bar is focused
         InventorySearch.register();
 
         ScreenEvents.BEFORE_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
@@ -187,7 +201,7 @@ public class IslesClient implements ClientModInitializer {
                     return false; // consume the key press
                 }
 
-                // Hotbar swap keys (1–9): block if either endpoint is locked
+                // hotbar swap keys 1-9, block if either slot is locked
                 int hotbarIndex = -1;
                 for (int i = 0; i < 9; i++) {
                     if (mc.options.hotbarKeys[i].matchesKey(context)) {
@@ -224,6 +238,7 @@ public class IslesClient implements ClientModInitializer {
             PlushieFinder.onMessage(text);
             HarvestTimer.onMessage(text);
             BossTracker.onChatMessage(text);
+            RankCalculator.onChatMessage(text);
         });
 
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
@@ -285,12 +300,14 @@ public class IslesClient implements ClientModInitializer {
             }
         });
         WorldRenderEvents.AFTER_ENTITIES.register(PlushieWaypointRenderer::render);
+        WorldRenderEvents.AFTER_ENTITIES.register(WaystoneTagRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(SecretBlockRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(QteRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(GroundItemsRenderer::render);
         HudRenderCallback.EVENT.register((context, tickDelta) -> {
             MinecraftClient mc = MinecraftClient.getInstance();
             RankHudRenderer.render(context, mc);
+            InventoryNotifier.renderHud(context, mc);
             PlushieStatusHudRenderer.render(context, mc);
             QteHudRenderer.render(context, mc);
             GroundItemsHudRenderer.render(context, mc);
@@ -305,26 +322,64 @@ public class IslesClient implements ClientModInitializer {
         while (RESOURCE_VAULT_KEY.wasPressed()) { ResourceVaultOpener.activate(); }
         while (AUTO_PARTY_KEY.wasPressed()) { if (AutoParty.enabled) AutoParty.trigger(client); }
         while (PARTY_WARP_KEY.wasPressed()) { if (AutoParty.enabled && client.player != null) client.player.networkHandler.sendChatCommand("p warp"); }
-        EntityScanResult scan = EntityScanner.scan(client);
-        NodeTracker.tick(client, scan);
-        if (!FeatureFlags.isKilled("harvest_timer"))       HarvestTimer.tick();
-        if (!FeatureFlags.isKilled("node_radius"))         NodeRadiusRenderer.tick(client);
-        if (!FeatureFlags.isKilled("node_depleted_ping"))  NodeAlertManager.tickSkillAlert(client);
-        if (!FeatureFlags.isKilled("regen_mode"))          NodeAlertManager.tickRegenReminder(client);
-        if (!FeatureFlags.isKilled("drop_notify"))         DropNotifier.tick(client);
-        if (!FeatureFlags.isKilled("inventory_full"))      InventoryNotifier.tick(client, CONFIRM_INVENTORY_FULL_KEY.getBoundKeyLocalizedText());
-        WorldIdentification.tick(client);
-        if (!FeatureFlags.isKilled("vending_machine_finder")) VendingMachineFinder.tick(client, scan);
-        if (!FeatureFlags.isKilled("chest_finder"))        ChestFinder.tick(client, scan);
-        VoidCrystalFinder.tick(client, scan);
-        if (!FeatureFlags.isKilled("button_finder"))       SecretFinder.tick(client, scan);
-        if (!FeatureFlags.isKilled("qte_tracker"))       QteTracker.tick(client, scan);
-        if (!FeatureFlags.isKilled("mob_finder"))          MobFinder.tick(client, scan);
-        if (!FeatureFlags.isKilled("player_finder"))       PlayerFinder.tick(client, scan);
-        if (!FeatureFlags.isKilled("rank_calculator"))     RankCalculator.tick(client, scan);
-        if (!FeatureFlags.isKilled("ground_items_notifier")) GroundItemsNotifier.tick(client, scan);
-        if (!FeatureFlags.isKilled("boss_tracker"))         BossTracker.tick(client);
-        AutoParty.tick(client);
+        boolean superJumpTapped = false;   // a press AND release inside one tick never shows as held
+        while (SUPER_JUMP_KEY.wasPressed()) superJumpTapped = true;
+        SuperJump.onKeyState(client, SUPER_JUMP_KEY.isPressed(), superJumpTapped);
+        SuperJump.tick(client);
+        EntityScanResult scan;
+        try {
+            scan = EntityScanner.scan(client);
+        } catch (RuntimeException e) {
+            reportTickFailure("entity_scanner", e);
+            return; // everything below depends on the scan
+        }
+        guardedTick("node_tracker",              () -> NodeTracker.tick(client, scan));
+        if (!FeatureFlags.isKilled("harvest_timer"))       guardedTick("harvest_timer",       HarvestTimer::tick);
+        if (!FeatureFlags.isKilled("node_radius"))         guardedTick("node_radius",         () -> NodeRadiusRenderer.tick(client));
+        if (!FeatureFlags.isKilled("node_depleted_ping"))  guardedTick("node_depleted_ping",  () -> NodeAlertManager.tickSkillAlert(client));
+        if (!FeatureFlags.isKilled("regen_mode"))          guardedTick("regen_mode",          () -> NodeAlertManager.tickRegenReminder(client));
+        if (!FeatureFlags.isKilled("drop_notify"))         guardedTick("drop_notify",         () -> DropNotifier.tick(client));
+        if (!FeatureFlags.isKilled("inventory_full"))      guardedTick("inventory_full",      () -> InventoryNotifier.tick(client, CONFIRM_INVENTORY_FULL_KEY.getBoundKeyLocalizedText()));
+        guardedTick("world_identification",      () -> WorldIdentification.tick(client));
+        if (!FeatureFlags.isKilled("vending_machine_finder")) guardedTick("vending_machine_finder", () -> VendingMachineFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("waystone_finder"))     guardedTick("waystone_finder",     () -> WaystoneFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("chest_finder"))        guardedTick("chest_finder",        () -> ChestFinder.tick(client, scan));
+        guardedTick("void_crystal_finder",       () -> VoidCrystalFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("button_finder"))       guardedTick("button_finder",       () -> SecretFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("qte_tracker"))         guardedTick("qte_tracker",         () -> QteTracker.tick(client, scan));
+        if (!FeatureFlags.isKilled("mob_finder"))          guardedTick("mob_finder",          () -> MobFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("player_finder"))       guardedTick("player_finder",       () -> PlayerFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("rank_calculator"))     guardedTick("rank_calculator",     () -> RankCalculator.tick(client, scan));
+        if (!FeatureFlags.isKilled("ground_items_notifier")) guardedTick("ground_items_notifier", () -> GroundItemsNotifier.tick(client, scan));
+        if (!FeatureFlags.isKilled("boss_tracker"))        guardedTick("boss_tracker",        () -> BossTracker.tick(client));
+        guardedTick("auto_party",                () -> AutoParty.tick(client));
+    }
+
+    // ---- per feature tick guard --------------------------------------------------------
+    // if a tick handler throws it bubbles up into mc's tick loop and the whole game crashes.
+    // one broken feature (or one weird value from the server) shouldn't take everything down,
+    // so every feature ticks inside its own try/catch
+
+    private static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("islesplus");
+    private static final java.util.Map<String, Integer> tickFailureCounts = new java.util.HashMap<>();
+    private static final int TICK_FAILURE_LOG_INTERVAL = 20 * 60; // once a minute at 20 tps
+
+    private static void guardedTick(String feature, Runnable tick) {
+        try {
+            tick.run();
+        } catch (RuntimeException e) {
+            reportTickFailure(feature, e);
+        }
+    }
+
+    /** first failure per feature gets a full stack trace, after that only once a minute so we don't spam the log */
+    private static void reportTickFailure(String feature, RuntimeException e) {
+        int count = tickFailureCounts.merge(feature, 1, Integer::sum);
+        if (count == 1) {
+            LOGGER.error("[Isles+] Feature '{}' threw during client tick; it will keep ticking but this tick was skipped", feature, e);
+        } else if (count % TICK_FAILURE_LOG_INTERVAL == 0) {
+            LOGGER.warn("[Isles+] Feature '{}' has now failed {} ticks (latest: {})", feature, count, e.toString());
+        }
     }
 
     public static void setChatUpdatesEnabled(boolean enabled) {
@@ -351,89 +406,102 @@ public class IslesClient implements ClientModInitializer {
     }
 
     public static void sendWelcomeMessage(MinecraftClient client) {
-        sendIslesMessage(client, "Use /ip to open the menu.");
-        String motd = FeatureFlags.getMotd();
-        if (motd.isEmpty()) motd = "Join our discord! https://discord.gg/UKnEWBDJ7w";
-        if (client.player != null) {
-            client.player.sendMessage(Text.empty().append(buildIslesPrefix()).append(buildMotdText(motd)), false);
+        if (client.player == null) return;
+        sendLine(client, CHAT_TEXT, "Use /ip to open the menu", "", "");
+
+        // Join message: the styled "motd_v2" lines if the remote file has them, otherwise the old
+        // plain "motd" string (its first URL becomes the link).
+        List<FeatureFlags.MotdLine> lines = FeatureFlags.getMotdLines();
+        if (lines.isEmpty()) {
+            String motd = FeatureFlags.getMotd();
+            if (motd.isEmpty()) motd = "Join our discord! https://discord.gg/UKnEWBDJ7w";
+            lines = List.of(motdLineFromPlain(motd));
         }
+        for (FeatureFlags.MotdLine line : lines) {
+            int accent = parseColor(line.color(), CHAT_ACCENT);
+            sendLine(client, accent, line.text(), line.link(), line.linkText());
+        }
+
         String latest = FeatureFlags.getLatestVersion();
-        if (!latest.isEmpty() && client.player != null) {
+        if (!latest.isEmpty()) {
             String current = FabricLoader.getInstance().getModContainer("islesplus")
                 .map(c -> c.getMetadata().getVersion().getFriendlyString())
                 .orElse("");
             if (!current.isEmpty() && !current.equals(latest)) {
                 String rawUrl = FeatureFlags.getLatestVersionUrl();
-                final String modrinthUrl = rawUrl.isEmpty() ? "https://modrinth.com/project/isles+" : rawUrl;
-                MutableText updateMsg = Text.literal("Update available: " + latest + " - ")
-                    .styled(s -> s.withColor(TextColor.fromRgb(STATUS_RED)));
-                try {
-                    updateMsg.append(Text.literal("click here")
-                        .styled(s -> s.withColor(TextColor.fromRgb(STATUS_RED))
-                            .withUnderline(true)
-                            .withClickEvent(new ClickEvent.OpenUrl(URI.create(modrinthUrl)))));
-                } catch (IllegalArgumentException ignored) {
-                    updateMsg.append(Text.literal("click here")
-                        .styled(s -> s.withColor(TextColor.fromRgb(STATUS_RED))));
-                }
-                client.player.sendMessage(Text.empty().append(buildIslesPrefix()).append(updateMsg), false);
+                String url = rawUrl.isEmpty() ? "https://modrinth.com/project/isles+" : rawUrl;
+                sendLine(client, CHAT_BRAND, "Update available: " + latest, url, "");
             }
         }
     }
 
     private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
 
-    private static Text buildMotdText(String motd) {
+    /** Old-style MOTD: the text with its first URL lifted out as the line's link. */
+    static FeatureFlags.MotdLine motdLineFromPlain(String motd) {
         Matcher matcher = URL_PATTERN.matcher(motd);
-        MutableText result = Text.empty();
-        int last = 0;
-        while (matcher.find()) {
-            if (matcher.start() > last) {
-                String plain = motd.substring(last, matcher.start());
-                result.append(Text.literal(plain)
-                    .styled(style -> style.withColor(TextColor.fromRgb(ACCENT_GOLD))));
-            }
-            String url = matcher.group();
-            MutableText urlText = Text.literal("click here")
-                .styled(style -> style.withColor(TextColor.fromRgb(ACCENT_GOLD)));
-            try {
-                URI uri = URI.create(url);
-                urlText = urlText.styled(style -> style
-                    .withUnderline(true)
-                    .withClickEvent(new ClickEvent.OpenUrl(uri)));
-            } catch (IllegalArgumentException ignored) {}
-            result.append(urlText);
-            last = matcher.end();
-        }
-        if (last < motd.length()) {
-            result.append(Text.literal(motd.substring(last))
-                .styled(style -> style.withColor(TextColor.fromRgb(ACCENT_GOLD))));
-        }
-        return result;
+        if (!matcher.find()) return new FeatureFlags.MotdLine(motd.trim(), "", "", "");
+        String text = (motd.substring(0, matcher.start()) + motd.substring(matcher.end())).trim();
+        // "Discord-> <url>" style leftovers: the arrow is drawn by the line itself
+        text = text.replaceAll("\\s*-+>\\s*$", "").trim();
+        return new FeatureFlags.MotdLine(text, matcher.group(), "", "");
     }
 
+    /** "#rrggbb" (or "rrggbb") to RGB; anything else gives the fallback. */
+    static int parseColor(String hex, int fallback) {
+        if (hex == null) return fallback;
+        String h = hex.startsWith("#") ? hex.substring(1) : hex;
+        if (h.length() != 6) return fallback;
+        try {
+            return Integer.parseInt(h, 16);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /** "ISLES+" wordmark in Silkscreen: lifted oxblood with a tan plus (MOTD mockup). */
     private static MutableText buildIslesPrefix() {
         return Text.empty()
-            .append(Text.literal("(Isles").styled(s -> s.withColor(Formatting.DARK_GRAY)))
-            .append(Text.literal("+").styled(s -> s.withColor(TextColor.fromRgb(0x55FFFF)).withBold(true)))
-            .append(Text.literal(") ").styled(s -> s.withColor(Formatting.DARK_GRAY)));
+            .append(Fonts.of("Isles").copy().styled(s -> s.withColor(TextColor.fromRgb(CHAT_BRAND))))
+            .append(Fonts.of("+").copy().styled(s -> s.withColor(TextColor.fromRgb(CHAT_PLUS))));
     }
 
-    /** Prefix styled, body plain white — use for informational one-off messages. */
-    public static void sendInfoMessage(MinecraftClient client, String message) {
+    /**
+     * One Isles+ chat line, as in the MOTD mockup: wordmark, a diamond mark, then the message, all
+     * in Silkscreen. With a link it ends "-> CLICK HERE": an arrow glyph and underlined link text
+     * that opens the URL.
+     */
+    private static void sendLine(MinecraftClient client, int textColor, String message, String link, String linkText) {
         if (client.player == null) return;
-        MutableText body = Text.literal(message)
-            .styled(style -> style.withColor(Formatting.WHITE));
-        client.player.sendMessage(Text.empty().append(buildIslesPrefix()).append(body), false);
+        MutableText line = Text.empty()
+            .append(buildIslesPrefix())
+            .append(Fonts.of(" "))
+            .append(Fonts.symbol(Fonts.DIAMOND).styled(s -> s.withColor(TextColor.fromRgb(textColor))))   // always the line's own colour
+            .append(Fonts.of(" " + message).copy().styled(s -> s.withColor(TextColor.fromRgb(textColor))));
+        if (link != null && !link.isBlank()) {
+            MutableText linkPart = Fonts.of(linkText == null || linkText.isBlank() ? "click here" : linkText).copy()
+                .styled(s -> s.withColor(TextColor.fromRgb(textColor)).withUnderline(true));
+            try {
+                URI uri = URI.create(link);
+                linkPart = linkPart.styled(s -> s.withClickEvent(new ClickEvent.OpenUrl(uri)));
+            } catch (IllegalArgumentException ignored) {
+                // not a usable URL: the words still show, they just do nothing
+            }
+            line.append(Fonts.of(" "))
+                .append(Fonts.symbol(Fonts.ARROW).styled(s -> s.withColor(TextColor.fromRgb(textColor))))
+                .append(Fonts.of(" "))
+                .append(linkPart);
+        }
+        client.player.sendMessage(line, false);
+    }
+
+    /** cream line. good for one-off info messages */
+    public static void sendInfoMessage(MinecraftClient client, String message) {
+        sendLine(client, CHAT_TEXT, message, "", "");
     }
 
     private static void sendIslesMessage(MinecraftClient client, String message) {
-        if (client.player == null) {
-            return;
-        }
-        MutableText body = Text.literal(message)
-            .styled(style -> style.withBold(true).withColor(TextColor.fromRgb(ACCENT_GOLD)));
-        client.player.sendMessage(Text.empty().append(buildIslesPrefix()).append(body), false);
+        sendLine(client, CHAT_TEXT, message, "", "");
     }
 
     public static String enabledDisabled(boolean enabled) {
@@ -469,6 +537,7 @@ public class IslesClient implements ClientModInitializer {
         DropNotifier.reset();
         InventoryNotifier.reset();
         VendingMachineFinder.reset();
+        WaystoneFinder.reset();
         ChestFinder.reset();
         VoidCrystalFinder.reset();
         SecretFinder.reset();
@@ -483,6 +552,7 @@ public class IslesClient implements ClientModInitializer {
         RankCalculator.reset();
         GroundItemsNotifier.reset();
         BossTracker.reset();
+        SuperJump.reset();
     }
 
 }

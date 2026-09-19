@@ -71,18 +71,18 @@ public class NodeTracker {
             && isSelfFarmingSignalForTrackedNode(scan.textDisplaysNearDouble, trackedNode);
 
         if (chanceSignalInDoubleNear && trackedNode != null) {
-            // While actively farming with a live % chance signal, stay pinned to the current node.
+            // we're farming and the % chance bar is up, stay locked on this node
             snapshot = findSnapshotByUuid(trackedNode.textDisplayUuid, client, scan.textDisplaysNear);
             if (snapshot == null) {
-                // If the tracked node moved outside 7 blocks but is still within 14, keep it pinned.
+                // node fell out of the 7 block list but it's still within 14, keep it
                 snapshot = findSnapshotByUuid(trackedNode.textDisplayUuid, client, scan.textDisplaysNearDouble);
             }
             if (snapshot == null) {
-                // Keep current tracked node state while chance signal still confirms active farming.
+                // can't see it at all but the chance bar says we're still farming, leave state alone
                 return;
             }
         } else if (chanceAnchor != null) {
-            // When % chance is visible, prefer the node physically closest to that signal.
+            // chance bar is up, whichever node is closest to it is the one we're farming
             snapshot = findNearestNodeSnapshotToAnchor(chanceAnchor, scan.textDisplaysNear);
         } else {
             snapshot = findNearestNodeSnapshot(client, scan);
@@ -108,7 +108,7 @@ public class NodeTracker {
             return;
         }
 
-        // Keep position up-to-date in case the entity was re-added to the world
+        // refresh the position in case the entity got re-added somewhere slightly different
         trackedNode.nodeX = snapshot.entityX;
         trackedNode.nodeY = snapshot.entityY;
         trackedNode.nodeZ = snapshot.entityZ;
@@ -123,7 +123,7 @@ public class NodeTracker {
             selfActivelyFarmingTrackedNode = selfActiveNow;
         }
 
-        // % chance is authoritative: immediately mark the node as active and armed.
+        // chance bar is the source of truth, node is active + armed the moment we see it
         if (selfActiveNow) {
             trackedNode.sawSelfFarming = true;
             if (!trackedNode.locked) {

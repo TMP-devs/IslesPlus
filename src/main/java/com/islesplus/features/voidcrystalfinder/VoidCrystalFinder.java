@@ -69,7 +69,7 @@ public final class VoidCrystalFinder {
         identifiedCrystalIds = Set.of();
     }
 
-    /** Returns true if the entity's model matches a void crystal. */
+    /** is this thing a void crystal */
     public static boolean isVoidCrystalEntity(Entity entity) {
         return entity != null && identifiedCrystalIds.contains(entity.getId());
     }

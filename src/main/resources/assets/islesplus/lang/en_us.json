@@ -8,5 +8,6 @@
   "key.islesplus.trash": "Open Trash (/trash)",
   "key.islesplus.resource_vault": "Open Resource Vault",
   "key.islesplus.auto_party": "Auto Party",
-  "key.islesplus.party_warp": "Party Warp (/p warp)"
+  "key.islesplus.party_warp": "Party Warp (/p warp)",
+  "key.islesplus.super_jump": "Super Jump (off hand + jump)"
 }

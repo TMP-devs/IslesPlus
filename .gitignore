@@ -48,3 +48,7 @@ replay_*.log
 # docs
 docs/plans/
 tmpclaude-*
+
+# wrangler local state (account ids, caches)
+.wrangler/
+node_modules/

@@ -1,12 +1,12 @@
 package com.islesplus.world;
 
 public enum PlayerWorld {
-    /** Hub, rift lobby, or any unrecognised world. */
+    /** hub, rift lobby, whatever else we don't recognise */
     OTHER,
-    /** Isles overworld instance (Isles01, Isles02, …). */
+    /** main isles world (Isles01, Isles02...) */
     ISLE,
-    /** Active rift run. */
+    /** inside a rift */
     RIFT,
-    /** Active rift run where dungeon features are explicitly disabled. */
+    /** inside a rift that's on the disabled list, dungeon features off */
     DISABLED_RIFT
 }

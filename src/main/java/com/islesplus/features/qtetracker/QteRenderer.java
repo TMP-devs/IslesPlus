@@ -22,8 +22,6 @@ public final class QteRenderer {
     private static final float LINE_WIDTH = 6.0f;
     private static final float BOX_HALF = 0.25f;
     private static final float BOX_HALF_LARGE = 0.35f;
-    private static final float BOX_HALF_SMALL = 0.1f;
-    private static final float BOX_Y_OFFSET_TICK_SKIP = 0.1f;
     private static final float BOX_Y_OFFSET_EXP_COINS = 0.875f;
     private static final float LINE_START_DIST = 1.0f;
 
@@ -80,9 +78,9 @@ public final class QteRenderer {
             // Compute box size and position
             // Luck/Chance: top of box aligns with text_display Y, larger box
             // Exp/Coins: fixed offset above entity feet
-            // Tick Skip: box at entity feet, small
+            // Tick Skip: offset + size come from the tracker (block rigs sit higher than item rigs)
             float half = switch (qte.type()) {
-                case TICK_SKIP -> BOX_HALF_SMALL;
+                case TICK_SKIP -> qte.boxHalf();
                 case LUCK, CHANCE -> BOX_HALF_LARGE;
                 default -> BOX_HALF;
             };
@@ -93,7 +91,7 @@ public final class QteRenderer {
             } else if (qte.type() == QteTracker.QteType.EXP || qte.type() == QteTracker.QteType.COINS) {
                 boxY = targetY + BOX_Y_OFFSET_EXP_COINS;
             } else {
-                boxY = targetY + BOX_Y_OFFSET_TICK_SKIP;
+                boxY = targetY + qte.boxYOffset();
             }
 
             // Line from crosshair (1 block along look direction) to box center
@@ -105,7 +103,10 @@ public final class QteRenderer {
                 0, 1, 0, color);
             matrices.pop();
 
-            // Box around QTE
+            // Box around QTE (most tick skips are line only, see QteTracker)
+            if (half <= 0f) continue;
+            // tick skip box is see-through so it doesn't hide the log/item you're clicking
+            if (qte.type() == QteTracker.QteType.TICK_SKIP) color = (color & 0x00FFFFFF) | 0x80000000;
             matrices.push();
             matrices.translate(targetX, boxY, targetZ);
             entry = matrices.peek();

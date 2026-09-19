@@ -14,12 +14,10 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /**
- * Polls a lightweight version file on GitHub Pages to detect remote data changes.
- * When the version bumps, invokes {@link RemoteDataSync#refreshAllSync()} on this
- * background thread, performing a blocking refresh of all remote data.
+ * polls a tiny version file on github pages every minute. when the number goes up we
+ * call {@link RemoteDataSync#refreshAllSync()} on this background thread to re-pull everything.
  *
- * Only polls when the player is in {@link PlayerWorld#ISLE} or {@link PlayerWorld#OTHER}
- * (not during dungeon runs).
+ * only polls in {@link PlayerWorld#ISLE} / {@link PlayerWorld#OTHER}, never mid dungeon
  */
 public final class RefreshPoller {
     private static final String URL = "https://tmp-devs.github.io/islesplusjson/refresh.json";
@@ -34,7 +32,7 @@ public final class RefreshPoller {
 
     private RefreshPoller() {}
 
-    /** Start polling. Called after world detection confirms a safe world. */
+    /** start polling, called once world detection says we're somewhere safe */
     public static void start() {
         stop();
         Thread t = new Thread(RefreshPoller::pollLoop, "IslesPlus-RefreshPoller");
@@ -43,7 +41,7 @@ public final class RefreshPoller {
         t.start();
     }
 
-    /** Stop polling. Called on disconnect. */
+    /** stop polling, called on disconnect */
     public static void stop() {
         Thread t = pollerThread;
         if (t != null) {
@@ -52,7 +50,7 @@ public final class RefreshPoller {
         }
     }
 
-    /** Trigger an immediate forced refresh (e.g., after leaving a dungeon). */
+    /** force a refresh right now (e.g. just left a dungeon) */
     public static void forceRefresh() {
         Thread checker = new Thread(() -> checkOnce(true), "IslesPlus-RefreshCheck");
         checker.setDaemon(true);
@@ -64,7 +62,7 @@ public final class RefreshPoller {
     }
 
     private static void pollLoop() {
-        // Initial check on connect (poller only starts in safe worlds)
+        // check once right away (we only get started in safe worlds anyway)
         checkOnce(false);
         while (!Thread.currentThread().isInterrupted()) {
             try {
@@ -86,7 +84,7 @@ public final class RefreshPoller {
                 .timeout(Duration.ofSeconds(8))
                 .GET();
 
-            // Skip ETag when forced so we always get a full response
+            // skip the etag when forced so github gives us the full body
             if (!force) {
                 String etag = lastEtag;
                 if (!etag.isEmpty()) {
@@ -115,11 +113,11 @@ public final class RefreshPoller {
             if (vEl == null || !vEl.isJsonPrimitive()) return;
             int version = vEl.getAsInt();
 
-            // Only update ETag after successful parse so bad responses don't poison the cache
+            // only save the etag after parsing worked, otherwise a bad response poisons the cache
             response.headers().firstValue("ETag").ifPresent(e -> lastEtag = e);
 
             if (lastKnownVersion == -1) {
-                // First check - record the version, trigger refresh if forced (e.g., world change)
+                // first check, just remember the version. refresh too if forced (world change etc)
                 if (force) {
                     if (RemoteDataSync.refreshAllSync()) {
                         lastKnownVersion = version;

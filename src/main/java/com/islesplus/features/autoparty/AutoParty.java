@@ -38,7 +38,7 @@ public final class AutoParty {
 
     private AutoParty() {}
 
-    /** Get the active invite list: group members if groups exist, otherwise flat friends. */
+    /** who to invite: the active group if you have groups, otherwise the plain friends list */
     public static List<String> getActiveInviteList() {
         if (!groups.isEmpty() && activeGroupIdx >= 0 && activeGroupIdx < groups.size()) {
             return groups.get(activeGroupIdx).members;

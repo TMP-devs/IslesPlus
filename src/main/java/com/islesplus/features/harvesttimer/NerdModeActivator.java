@@ -4,6 +4,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.screen.slot.Slot;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.Identifier;
@@ -48,20 +49,27 @@ public final class NerdModeActivator {
             if (stack.isEmpty()) continue;
             if (!stack.getName().getString().equals(NERD_MODE_NAME)) continue;
 
-            Identifier model = stack.get(DataComponentTypes.ITEM_MODEL);
-            if (GRAY_DYE.equals(model)) {
-                // Nerd mode is off - click to enable
+            if (isToggleOff(stack)) {
+                // nerd mode is off, click it on
                 client.interactionManager.clickSlot(
                     screen.getScreenHandler().syncId, slot.id, 0, SlotActionType.PICKUP, client.player
                 );
             }
-            // Either way, close the screen
+            // either way we're done, close it
             client.player.closeHandledScreen();
             return;
         }
 
-        // Nerd mode slot not found - close anyway
+        // couldn't find the nerd mode slot, close anyway
         client.player.closeHandledScreen();
+    }
+
+    // /settings toggles used to be gray dye (off) / lime dye (on) via item_model, the newer menu
+    // uses a plain ghast tear for off and paper for on (same as the plushie menu). handle both
+    private static boolean isToggleOff(ItemStack stack) {
+        if (stack.isOf(Items.GHAST_TEAR)) return true;
+        Identifier model = stack.get(DataComponentTypes.ITEM_MODEL);
+        return GRAY_DYE.equals(model);
     }
 
     public static void reset() {

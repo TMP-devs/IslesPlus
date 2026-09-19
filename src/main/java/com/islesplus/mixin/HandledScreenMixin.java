@@ -30,13 +30,13 @@ public class HandledScreenMixin {
         MinecraftClient client = MinecraftClient.getInstance();
         if (client.player == null) return;
 
-        // Block any direct interaction with a locked player-inventory slot.
+        // locked slot, don't let them touch it
         if (slot != null && SlotLocker.isLocked(slot, client.player.getInventory())) {
             ci.cancel();
             return;
         }
 
-        // Block hotbar swaps if the target hotbar slot is locked.
+        // number key swap into a locked hotbar slot, nope
         if (actionType == SlotActionType.SWAP && button >= 0 && button < 9 && SlotLocker.isHotbarSlotLocked(button)) {
             ci.cancel();
         }

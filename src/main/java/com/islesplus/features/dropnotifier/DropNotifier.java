@@ -17,7 +17,7 @@ public class DropNotifier {
     private static final long DROP_NOTIFY_COOLDOWN_MS = 2_500L;
 
     // public so IslesScreen (com.islesplus.screen) can read/write
-    public static boolean dropNotifyEnabled = false;
+    public static boolean dropNotifyEnabled = true;
     public static SoundConfig soundConfig = new SoundConfig("minecraft:entity.ender_dragon.growl", 0.85f, 1.00f);
     private static long lastDropNotifyMs = 0L;
 

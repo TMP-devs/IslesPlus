@@ -6,14 +6,13 @@ public final class ChatFilter {
     public static boolean chatFilterEnabled = false;
     public static boolean filterManaMeteor = true;
     public static boolean filterGuildChat = false;
+    public static boolean filterDeaths = false;
 
     private static final String MANA_METEOR_PREFIX = "(!!!) A Mana Meteor has crashed down near ";
 
     private ChatFilter() {}
 
-    /**
-     * Returns true if the message should be suppressed (filtered out).
-     */
+    /** true = hide this message */
     public static boolean shouldFilter(String plain) {
         if (!chatFilterEnabled || FeatureFlags.isKilled("chat_filter")) return false;
 
@@ -25,6 +24,18 @@ public final class ChatFilter {
             return true;
         }
 
+        if (filterDeaths && isDeathMessage(plain)) {
+            return true;
+        }
+
         return false;
+    }
+
+    /** Server death broadcast, e.g. "Name DIED! They lost 0 items and 24 coins!" (with skull and
+     * arrow symbols around it). Matched on its fixed wording rather than the symbols, and never
+     * on a player's own chat line (those contain the "»" name separator), so someone typing
+     * "DIED!" in chat is not hidden. */
+    static boolean isDeathMessage(String plain) {
+        return plain != null && plain.contains(" DIED!") && plain.contains("They lost ") && !plain.contains("»");
     }
 }

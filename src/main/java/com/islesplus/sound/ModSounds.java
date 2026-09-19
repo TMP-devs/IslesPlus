@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 
 public final class ModSounds {
 
-    /** Curated list of Minecraft sound IDs available in the sound editor. */
+    /** hand picked mc sounds you can choose from in the sound editor */
     public static final String[] SOUND_LIST = {
         "minecraft:block.note_block.pling",
         "minecraft:block.note_block.bell",
@@ -61,8 +61,8 @@ public final class ModSounds {
     }
 
     /**
-     * Sounds the mod will actively play. Rebuilt whenever configs load or save.
-     * Always includes the non-configurable cues (slot lock, menu click).
+     * sounds the mod is allowed to play. rebuilt on config load/save.
+     * slot lock + menu click are always in here since you can't change those
      */
     private static final Set<String> ALLOWED_SOUND_IDS = new java.util.HashSet<>();
     static {
@@ -71,8 +71,8 @@ public final class ModSounds {
     }
 
     /**
-     * Rebuild the allowlist from whatever sounds are currently configured on active features.
-     * Call this after loading or saving config.
+     * rebuild the allowlist from whatever's configured on enabled features.
+     * call after config load/save
      */
     public static void rebuildActiveSounds(Iterable<String> activeSoundIds) {
         ALLOWED_SOUND_IDS.clear();

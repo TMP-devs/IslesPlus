@@ -2,612 +2,467 @@ package com.islesplus.screen.islesscreen;
 
 import com.islesplus.IslesClient;
 import com.islesplus.IslesPlusConfig;
-import com.islesplus.features.grounditemsnotifier.GroundItemsCardRenderer;
-import com.islesplus.features.bosstracker.BossTrackerCardRenderer;
-import com.islesplus.features.autoparty.AutoPartyCardRenderer;
-import com.islesplus.sound.SoundConfig;
+import com.islesplus.ui.Draw;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Metrics;
+import com.islesplus.ui.OverlayHost;
+import com.islesplus.ui.Theme;
+import com.islesplus.ui.Widget;
+import com.islesplus.ui.widgets.NoteTooltip;
+import com.islesplus.ui.widgets.TextField;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.item.ItemStack;
 import net.minecraft.text.Text;
-import net.minecraft.util.Util;
-import net.minecraft.util.math.MathHelper;
+import org.lwjgl.glfw.GLFW;
 
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
-import java.util.Set;
-import java.util.function.Consumer;
+import java.util.Map;
 
-import static com.islesplus.screen.islesscreen.ScreenColors.*;
+/**
+ * The /ip dashboard: a parchment scroll holding three tabs of {@link FeatureRow} cards in a
+ * two-column grid, plus a stack of modal overlays (dropdown lists, dialogs) drawn on top.
+ *
+ * <p>Shell concerns only — frame, tabs, grid, scrolling, overlay hosting and input routing. The
+ * cards themselves live in {@link Rows}; the parchment frame in {@link ScrollFrame}.
+ */
+public class IslesScreen extends Screen implements OverlayHost {
+    private static final String[] TAB_LABELS = {"QOL", "NODE FARMING", "RIFT"};
+    private static final Tab[] TABS = {Tab.QOL, Tab.NODE_FARMING, Tab.RIFT};
+    private static final String SIGNATURE = "by Chrrisk & Scrolls";
+    private static final int TAB_PAD_X = 8, TAB_PAD_X_ACTIVE = 10, TAB_RIVET_GAP = 4, RIVET_W = 3;
+    private static final int TABS_TO_GRID_GAP = 6, SCROLL_STEP = 20;
+    /** Strip under the card grid that holds the makers' signature. */
+    // Measured on a screenshot at size 20: the script's ink starts 10 px ABOVE the y it is drawn at
+    // (tall capitals and swashes) and ends 13 px below it. The footer strip is sized from that, so
+    // the whole signature sits under the card area with clear room above it.
+    private static final int SIGN_RISE = 10, SIGN_DROP = 13, SIGN_CLEARANCE = 8, SIGN_BOTTOM_MARGIN = 4;
+    private static final int SIGN_RIGHT_INSET = 5;
+    private static final int FOOTER_H = SIGN_CLEARANCE + SIGN_RISE + SIGN_DROP + SIGN_BOTTOM_MARGIN;
 
-public class IslesScreen extends Screen {
-    private static final int SCREEN_MIN_WIDTH = 380;
-    private static final int SCREEN_MIN_HEIGHT = 250;
+    private final ScrollFrame frame = new ScrollFrame();
+    private final Map<Tab, List<FeatureRow>> rows = new EnumMap<>(Tab.class);
+    private final List<Widget> overlays = new ArrayList<>();
 
-    private final CardRegistry cards = new CardRegistry();
     private Tab activeTab = Tab.QOL;
-
-    // Expandable card state
-    private final Set<FeatureCard> expandedCards = new HashSet<>();
-    private boolean sliderDragging = false;
-    private int dragSliderTrackX, dragSliderTrackWidth;
-    private Consumer<Float> activeSliderConsumer = null;
-
-    // Scroll state
-    private int scrollOffset = 0;
-
-    private int guiX, guiY, guiWidth, guiHeight;
-    private int tabsX, tabsY, tabsWidth, tabsHeight;
-    private int contentX, contentY, contentWidth, contentHeight;
+    private int scroll;
+    private double scrollRemainder;
+    private boolean singleColumn;
+    private final KonamiCode konami = new KonamiCode();
+    private int gridX, gridY, gridW, gridH, gridContentH;
 
     public IslesScreen() {
         super(Text.literal("IslesPlus"));
+        rows.put(Tab.QOL, Rows.qol(this));
+        rows.put(Tab.NODE_FARMING, Rows.nodeFarming(this));
+        rows.put(Tab.RIFT, Rows.rift(this));
     }
 
     @Override
     protected void init() {
-        super.init();
-        int desiredWidth = Math.max(SCREEN_MIN_WIDTH, this.width - 80);
-        int desiredHeight = Math.max(SCREEN_MIN_HEIGHT, this.height - 60);
-        this.guiWidth = Math.min(this.width - 20, desiredWidth);
-        this.guiHeight = Math.min(this.height - 20, desiredHeight);
-        this.guiX = (this.width - this.guiWidth) / 2;
-        this.guiY = (this.height - this.guiHeight) / 2;
-
-        this.tabsX = this.guiX + 18;
-        this.tabsY = this.guiY + 42;
-        this.tabsWidth = this.guiWidth - 36;
-        this.tabsHeight = 22;
-
-        this.contentX = this.guiX + 18;
-        this.contentY = this.tabsY + this.tabsHeight + 12;
-        this.contentWidth = this.guiWidth - 36;
-        this.contentHeight = this.guiHeight - 94;
+        Fonts.resetFallbackCheck();
+        // Size the scroll so every card title (on any tab) fits on one line.
+        int cardW = 0;
+        for (List<FeatureRow> tab : rows.values()) for (FeatureRow row : tab) cardW = Math.max(cardW, row.widthForFullTitle());
+        frame.layout(this.client, this.width, this.height, 2 * cardW + Metrics.GRID_GAP);
+        gridX = frame.contentX;
+        gridW = frame.contentW;
+        // The scroll cannot grow past the window. When two columns would be too narrow for the
+        // longest title (1080p at GUI scale 4, small windows), use one full-width column rather than
+        // cut titles short.
+        singleColumn = (gridW - Metrics.GRID_GAP) / 2 < cardW;
+        gridY = tabBottom() + TABS_TO_GRID_GAP;
+        gridH = Math.max(1, frame.contentY + frame.contentH - FOOTER_H - gridY);
     }
 
-    @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, this.width, this.height, 0xAA090909);
+    private List<FeatureRow> activeRows() { return rows.get(activeTab); }
 
-        context.fill(this.guiX - 2, this.guiY - 2, this.guiX + this.guiWidth + 2, this.guiY + this.guiHeight + 2, ACCENT_SOFT);
-        context.fill(this.guiX, this.guiY, this.guiX + this.guiWidth, this.guiY + this.guiHeight, BG);
-        context.fill(this.guiX + 14, this.guiY + 14, this.guiX + this.guiWidth - 14, this.guiY + this.guiHeight - 14, PANEL);
+    private int tabBottom() { return frame.contentY + Metrics.TAB_H + 1; }
 
-        context.drawText(this.textRenderer, Text.literal("Isles+ Dashboard"), this.guiX + 24, this.guiY + 20, TEXT_PRIMARY, true);
-        context.drawText(this.textRenderer, Text.literal("Clean controls for your island tools"), this.guiX + 24, this.guiY + 30, TEXT_MUTED, false);
-        drawTabs(context, mouseX, mouseY);
-        drawFeatureCards(context, mouseX, mouseY);
-        drawAuthorSignature(context);
+    /** The row the tabs' bottom outline is on: where the shelf line runs. */
+    private int shelfY() { return tabBottom(); }
 
-        // Overlays rendered on top of everything
-        SoundEditorOverlay.draw(context, this.textRenderer, this.width, this.height, mouseX, mouseY);
-
-        super.render(context, mouseX, mouseY, delta);
+    private int tabWidth(int i) {
+        int pad = TABS[i] == activeTab ? TAB_PAD_X_ACTIVE : TAB_PAD_X;
+        return 2 * pad + 2 * RIVET_W + 2 * TAB_RIVET_GAP + Fonts.width(TAB_LABELS[i], Fonts.TITLE);
     }
 
-    private void drawAuthorSignature(DrawContext context) {
-        String authorLabel = "by chrrisk & Scrolls";
-        float scale = AUTHOR_TEXT_SCALE;
-        int labelWidth = (int)(this.textRenderer.getWidth(authorLabel) * scale);
-        int baseX = this.guiX + this.guiWidth - labelWidth - 6;
-        int baseY = this.guiY + 6;
-        float hue = (Util.getMeasuringTimeMs() % 4000L) / 4000.0F;
-        int authorTextColor = 0xFF000000 | MathHelper.hsvToRgb(hue, 1.0F, 1.0F);
-        context.getMatrices().pushMatrix();
-        context.getMatrices().scale(scale, scale);
-        context.drawText(this.textRenderer, Text.literal(authorLabel), (int)(baseX / scale), (int)(baseY / scale), authorTextColor, false);
-        context.getMatrices().popMatrix();
+    private int tabX(int i) {
+        int x = frame.contentX;
+        for (int j = 0; j < i; j++) x += tabWidth(j) + Metrics.TAB_GAP;
+        return x;
     }
 
-    private void drawTabs(DrawContext context, int mouseX, int mouseY) {
-        int tabCount = 3;
-        int gap = 8;
-        int tabWidth = (this.tabsWidth - gap * (tabCount - 1)) / tabCount;
-        drawTab(context, this.tabsX, this.tabsY, tabWidth, this.tabsHeight, Tab.QOL, mouseX, mouseY, "QOL");
-        drawTab(context, this.tabsX + tabWidth + gap, this.tabsY, tabWidth, this.tabsHeight, Tab.NODE_FARMING, mouseX, mouseY, "Node Farming");
-        drawTab(context, this.tabsX + (tabWidth + gap) * 2, this.tabsY, tabWidth, this.tabsHeight, Tab.RIFT, mouseX, mouseY, "Rift");
+    /** The active tab is drawn (and hit-tested) 1 px taller, sharing the others' bottom edge. */
+    private int tabHeight(int i) { return TABS[i] == activeTab ? Metrics.TAB_H + 1 : Metrics.TAB_H; }
+
+    // ==============================
+    // Layout
+    // ==============================
+
+    /** Lays out every card of the active tab, clamping the scroll offset if the content shrank. */
+    private void layoutGrid() {
+        layoutPass();
+        int max = maxScroll();
+        if (scroll > max || scroll < 0) {
+            scroll = Math.max(0, Math.min(scroll, max));
+            layoutPass();
+        }
     }
 
-    private void drawTab(DrawContext context, int x, int y, int width, int height, Tab tab, int mouseX, int mouseY, String label) {
-        boolean active = this.activeTab == tab;
-        boolean hovered = isInside(mouseX, mouseY, x, y, width, height);
-        int fill = active ? ACCENT : hovered ? PANEL_HOVER : PANEL_SOFT;
-        int text = active ? 0xFFFFFFFF : TEXT_MUTED;
-
-        context.fill(x, y, x + width, y + height, fill);
-        context.fill(x, y + height - 1, x + width, y + height, active ? 0xFFFFFFFF : BORDER);
-        int tx = x + (width - this.textRenderer.getWidth(label)) / 2;
-        context.drawText(this.textRenderer, Text.literal(label), tx, y + 7, text, false);
-    }
-
-    private void drawFeatureCards(DrawContext context, int mouseX, int mouseY) {
-        List<FeatureCard> activeCards = cards.getActiveCards(activeTab);
-        int cardsPerRow = 2;
-        int gap = 10;
-        int cardWidth = (this.contentWidth - gap) / cardsPerRow;
-        int cardHeight = 44;
-
-        int[] rowHeights = computeRowHeights(activeCards, cardsPerRow);
-
-        int scissorBottom = Math.min(this.contentY + this.contentHeight, this.guiY + this.guiHeight - 18);
-        context.enableScissor(this.contentX, this.contentY, this.contentX + this.contentWidth, scissorBottom);
-
-        for (int i = 0; i < activeCards.size(); i++) {
-            FeatureCard card = activeCards.get(i);
-            int row = i / cardsPerRow;
-            int col = i % cardsPerRow;
-            int x = this.contentX + col * (cardWidth + gap);
-            int y = this.contentY + rowY(rowHeights, row, gap) - scrollOffset;
-            if (card.controlType == FeatureCard.ControlType.EXPANDABLE) {
-                drawExpandableCard(context, card, x, y, cardWidth, mouseX, mouseY);
-            } else {
-                boolean hovered = isInside(mouseX, mouseY, x, y, cardWidth, cardHeight);
-                drawFeatureCard(context, card, x, y, cardWidth, cardHeight, hovered);
+    private void layoutPass() {
+        int gap = Metrics.GRID_GAP;
+        List<FeatureRow> list = activeRows();
+        int top = gridY - scroll;
+        if (singleColumn) {
+            int y = top;
+            for (FeatureRow row : list) {
+                row.minHeight = 0;
+                y += row.layout(gridX, y, Math.max(1, gridW)) + gap;
             }
-        }
-
-        context.disableScissor();
-    }
-
-    private void drawExpandableCard(DrawContext context, FeatureCard card, int x, int y, int width, int mouseX, int mouseY) {
-        boolean killed = card.isKilled();
-        boolean expanded = !killed && expandedCards.contains(card);
-        int h = expanded ? getExpandedCardHeight(card) : 44;
-        boolean hovered = isInside(mouseX, mouseY, x, y, width, h);
-        int cardBg = killed ? 0xEE1A1A1A : hovered ? PANEL_HOVER : PANEL_SOFT;
-        context.fill(x, y, x + width, y + h, cardBg);
-        context.fill(x, y, x + width, y + 1, BORDER);
-        context.fill(x, y + h - 1, x + width, y + h, BORDER);
-
-        boolean enabled = !killed && card.enabledSupplier != null && card.enabledSupplier.getAsBoolean();
-
-        ItemStack icon = new ItemStack(card.iconSupplier.get());
-        if (enabled) icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
-        context.drawItem(icon, x + 10, y + 13);
-
-        int textColor = killed ? TEXT_MUTED : TEXT_PRIMARY;
-        context.drawText(this.textRenderer, Text.literal(card.label), x + 34, y + 10, textColor, false);
-        context.drawText(this.textRenderer, Text.literal(card.description), x + 34, y + 22, killed ? 0xFF666666 : TEXT_MUTED, false);
-        if (!killed && card.note != null) {
-            context.drawText(this.textRenderer, Text.literal(card.note), x + 34, y + 32, TEXT_WARNING, false);
-        }
-
-        if (killed) {
-            String disabledText = "Disabled";
-            int dw = this.textRenderer.getWidth(disabledText);
-            int dx = x + width - dw - 10;
-            int dy = y + (44 - this.textRenderer.fontHeight) / 2;
-            context.drawText(this.textRenderer, Text.literal(disabledText), dx, dy, 0xFFE74C3C, false);
-        } else if (card.isKeybindsCard) {
-            drawChevron(context, x + 5, y + 22, expanded, TEXT_MUTED);
-        } else {
-            int toggleW = 42, toggleH = 16;
-            int tx = x + width - toggleW - 10;
-            int ty = y + (44 - toggleH) / 2;
-            drawChevron(context, x + 5, y + 22, expanded, TEXT_MUTED);
-            drawToggle(context, tx, ty, toggleW, toggleH, enabled);
-        }
-
-        if (!expanded) return;
-
-        context.fill(x + 8, y + 44, x + width - 8, y + 45, BORDER);
-        int bodyY = y + 44 + 6;
-
-        // Item list card — delegate entirely to GroundItemsCardRenderer
-        if (card.isItemListCard) {
-            GroundItemsCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
+            gridContentH = list.isEmpty() ? 0 : y - top - gap;
             return;
         }
-
-        // Boss list card — delegate to BossTrackerCardRenderer
-        if (card.isBossListCard) {
-            BossTrackerCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
-            return;
-        }
-
-        // Auto party card
-        if (card.isAutoPartyCard) {
-            AutoPartyCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
-            return;
-        }
-
-        // Keybinds card
-        if (card.isKeybindsCard) {
-            KeybindsCardRenderer.draw(context, this.textRenderer, x + 8, bodyY, width - 16, mouseX, mouseY);
-            return;
-        }
-
-        // Standard expandable body
-        if (card.expandOptions != null && card.optionSuppliers != null) {
-            for (int i = 0; i < card.expandOptions.length; i++) {
-                int optY = bodyY + i * 18;
-                context.drawText(this.textRenderer, Text.literal(card.expandOptions[i]), x + 14, optY + 5, TEXT_PRIMARY, false);
-                int cbSize = 12;
-                int cbX = x + width - cbSize - 14;
-                int cbY = optY + (18 - cbSize) / 2;
-                drawCheckbox(context, cbX, cbY, cbSize, card.optionSuppliers[i].getAsBoolean());
-            }
-            bodyY += card.expandOptions.length * 18;
-        }
-
-        bodyY += 6;
-
-        if (card.soundConfigSupplier != null) {
-            int midY = bodyY + 8;
-            context.drawText(this.textRenderer, Text.literal("Sound:"), x + 14, midY, TEXT_MUTED, false);
-            int labelW = this.textRenderer.getWidth("Sound:");
-            int btnX = x + 14 + labelW + 6;
-            int btnW = 80;
-            int btnY = midY - 3;
-            boolean btnHov = isInside(mouseX, mouseY, btnX, btnY, btnW, 14);
-            context.fill(btnX, btnY, btnX + btnW, btnY + 14, btnHov ? PANEL_HOVER : PANEL_SOFT);
-            context.fill(btnX, btnY, btnX + btnW, btnY + 1, BORDER);
-            String btnLabel = "Edit Sound";
-            context.drawText(this.textRenderer, Text.literal(btnLabel),
-                btnX + (btnW - this.textRenderer.getWidth(btnLabel)) / 2, btnY + 3, TEXT_PRIMARY, false);
-            bodyY += 22;
-        } else if (card.sliderLabel != null && card.sliderSupplier != null) {
-            int midY = bodyY + 12;
-            int labelW = this.textRenderer.getWidth(card.sliderLabel);
-            context.drawText(this.textRenderer, Text.literal(card.sliderLabel), x + 14, midY - 4, TEXT_MUTED, false);
-
-            int trackX = x + 14 + labelW + 8;
-            int trackEnd = x + width - 14;
-            int trackW = trackEnd - trackX;
-            int knobX = trackX + (int)(card.sliderSupplier.get() * trackW);
-
-            if (card.huePicker) {
-                for (int px = 0; px < trackW; px += 2) {
-                    int color = 0xFF000000 | MathHelper.hsvToRgb((float) px / trackW, 1.0f, 1.0f);
-                    context.fill(trackX + px, midY - 5, Math.min(trackX + px + 2, trackEnd), midY + 5, color);
-                }
-                context.fill(knobX - 3, midY - 7, knobX + 3, midY + 7, 0xFF000000);
-                context.fill(knobX - 2, midY - 6, knobX + 2, midY + 6, 0xFFFFFFFF);
-            } else {
-                context.fill(trackX, midY - 1, trackEnd, midY + 1, BORDER);
-                context.fill(knobX - 4, midY - 4, knobX + 4, midY + 4, TEXT_PRIMARY);
-            }
-            bodyY += 24;
-        }
-
-        if (card.legendLines != null) {
-            for (String line : card.legendLines) {
-                context.drawText(this.textRenderer, Text.literal(line), x + 14, bodyY + 2, TEXT_MUTED, false);
-                bodyY += 12;
+        int cardW = Math.max(1, (gridW - gap) / 2);
+        // Two independent columns: a pair of cards shares its COLLAPSED height so the closed grid
+        // stays even, but an expanded card only lengthens its own column — its neighbour keeps its
+        // size and only the cards below it in the same column shift down.
+        int leftY = top, rightY = top;
+        int rightX = gridX + cardW + gap;
+        for (int i = 0; i < list.size(); i += 2) {
+            FeatureRow a = list.get(i);
+            FeatureRow b = i + 1 < list.size() ? list.get(i + 1) : null;
+            int closedH = collapsedHeight(a, gridX, leftY, cardW);
+            if (b != null) closedH = Math.max(closedH, collapsedHeight(b, rightX, rightY, cardW));
+            a.minHeight = closedH;
+            leftY += a.layout(gridX, leftY, cardW) + gap;
+            if (b != null) {
+                b.minHeight = closedH;
+                rightY += b.layout(rightX, rightY, cardW) + gap;
             }
         }
+        gridContentH = list.isEmpty() ? 0 : Math.max(leftY, rightY) - top - gap;
     }
 
-    private void drawFeatureCard(DrawContext context, FeatureCard card, int x, int y, int width, int height, boolean hovered) {
-        boolean killed = card.isKilled();
-        boolean enabled = !killed && card.enabledSupplier != null && card.enabledSupplier.getAsBoolean();
-        int cardBg = killed ? 0xEE1A1A1A : hovered ? PANEL_HOVER : PANEL_SOFT;
-        context.fill(x, y, x + width, y + height, cardBg);
-        context.fill(x, y, x + width, y + 1, BORDER);
-        context.fill(x, y + height - 1, x + width, y + height, BORDER);
-
-        ItemStack icon = new ItemStack(card.iconSupplier.get());
-        if (enabled) icon.set(DataComponentTypes.ENCHANTMENT_GLINT_OVERRIDE, true);
-        context.drawItem(icon, x + 10, y + 13);
-
-        int textColor = killed ? TEXT_MUTED : TEXT_PRIMARY;
-        context.drawText(this.textRenderer, Text.literal(card.label), x + 34, y + 10, textColor, false);
-        int descColor = killed ? 0xFF666666 : card.redDescription ? 0xFFFF4D4D : TEXT_MUTED;
-        context.drawText(this.textRenderer, Text.literal(card.description), x + 34, y + 22, descColor, false);
-        if (!killed && card.note != null) {
-            context.drawText(this.textRenderer, Text.literal(card.note), x + 34, y + 32, TEXT_WARNING, false);
-        }
-
-        if (killed) {
-            String disabledText = "Disabled";
-            int dw = this.textRenderer.getWidth(disabledText);
-            int dx = x + width - dw - 10;
-            int dy = y + (height - this.textRenderer.fontHeight) / 2;
-            context.drawText(this.textRenderer, Text.literal(disabledText), dx, dy, 0xFFE74C3C, false);
-        } else {
-            int toggleW = 42, toggleH = 16;
-            int tx = x + width - toggleW - 10;
-            int ty = y + (height - toggleH) / 2;
-            drawToggle(context, tx, ty, toggleW, toggleH, enabled);
-        }
-    }
-
-    private void drawToggle(DrawContext context, int x, int y, int w, int h, boolean enabled) {
-        context.fill(x, y, x + w, y + h, enabled ? POSITIVE : 0xFF5B6678);
-        int knobSize = h - 4;
-        int knobX = enabled ? x + w - knobSize - 2 : x + 2;
-        context.fill(knobX, y + 2, knobX + knobSize, y + 2 + knobSize, 0xFFFFFFFF);
-    }
-
-    private void drawChevron(DrawContext context, int cx, int cy, boolean down, int color) {
-        if (down) {
-            context.fill(cx - 3, cy - 1, cx + 4, cy,     color);
-            context.fill(cx - 2, cy,     cx + 3, cy + 1, color);
-            context.fill(cx - 1, cy + 1, cx + 2, cy + 2, color);
-            context.fill(cx,     cy + 2, cx + 1, cy + 3, color);
-        } else {
-            context.fill(cx - 1, cy - 3, cx,     cy + 4, color);
-            context.fill(cx,     cy - 2, cx + 1, cy + 3, color);
-            context.fill(cx + 1, cy - 1, cx + 2, cy + 2, color);
-            context.fill(cx + 2, cy,     cx + 3, cy + 1, color);
-        }
-    }
-
-    private void drawCheckbox(DrawContext context, int x, int y, int size, boolean checked) {
-        context.fill(x, y, x + size, y + size, BORDER);
-        context.fill(x + 1, y + 1, x + size - 1, y + size - 1, PANEL_SOFT);
-        if (checked) context.fill(x + 2, y + 2, x + size - 2, y + size - 2, POSITIVE);
-    }
-
-    private int[] computeRowHeights(List<FeatureCard> activeCards, int cardsPerRow) {
-        int rows = (activeCards.size() + cardsPerRow - 1) / cardsPerRow;
-        int[] heights = new int[rows];
-        for (int i = 0; i < activeCards.size(); i++) {
-            int row = i / cardsPerRow;
-            FeatureCard card = activeCards.get(i);
-            int h = (card.controlType == FeatureCard.ControlType.EXPANDABLE && expandedCards.contains(card))
-                ? getExpandedCardHeight(card) : 44;
-            heights[row] = Math.max(heights[row], h);
-        }
-        return heights;
-    }
-
-    private int rowY(int[] rowHeights, int row, int gap) {
-        int y = 0;
-        for (int r = 0; r < row; r++) y += rowHeights[r] + gap;
-        return y;
-    }
-
-    private int getExpandedCardHeight(FeatureCard card) {
-        if (card.isItemListCard) {
-            return 44 + 6 + GroundItemsCardRenderer.getExpandedHeight() + 8;
-        }
-        if (card.isBossListCard) {
-            return 44 + 6 + BossTrackerCardRenderer.getExpandedHeight() + 8;
-        }
-        if (card.isAutoPartyCard) {
-            return 44 + 6 + AutoPartyCardRenderer.getExpandedHeight() + 8;
-        }
-        if (card.isKeybindsCard) {
-            return 44 + 6 + KeybindsCardRenderer.getExpandedHeight() + 8;
-        }
-        int h = 44 + 6;
-        if (card.expandOptions != null) h += card.expandOptions.length * 18;
-        h += 6;
-        if (card.soundConfigSupplier != null) h += 22;
-        else if (card.sliderLabel != null) h += 24;
-        if (card.legendLines != null) h += card.legendLines.length * 12;
-        h += 8;
+    /** Height the card would have with its drawer closed (measured without disturbing its state). */
+    private static int collapsedHeight(FeatureRow row, int x, int y, int width) {
+        boolean wasExpanded = row.expanded;
+        row.expanded = false;
+        row.minHeight = 0;
+        int h = row.layout(x, y, width);
+        row.expanded = wasExpanded;
         return h;
     }
 
+    /** A card's outer ring is drawn 1 px outside its bounds, so when the content overflows the
+     * view, the scroll range runs a little past the last card: otherwise the bottom edge of the
+     * last card is clipped away at the end of the scroll. */
+    private static final int SCROLL_END_SLACK = 2;
+
+    private int maxScroll() {
+        int overflow = gridContentH - gridH;
+        return overflow <= 0 ? 0 : overflow + SCROLL_END_SLACK;
+    }
+
+    /** Whether a click point is inside the card grid AND inside the scroll's revealed area. */
+    private boolean inGrid(double mx, double my) {
+        return mx >= gridX && mx < gridX + gridW && my >= gridY && my < gridY + gridH
+            && my < frame.revealBottom();
+    }
+
+    // ==============================
+    // Render
+    // ==============================
+
+    @Override
+    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        boolean overlaid = !overlays.isEmpty();
+        int hx = overlaid ? -1 : mouseX;
+        int hy = overlaid ? -1 : mouseY;
+
+        ctx.fill(0, 0, this.width, this.height, Theme.SCRIM);
+        frame.render(ctx);
+        layoutGrid();
+        FeatureRow.hoveredNote = null;
+
+        int revealBottom = frame.revealBottom();
+        if (revealBottom > frame.contentY) {
+            // 1 px of slack all round so the cards' and tabs' outer rings are not clipped away.
+            ctx.enableScissor(frame.contentX - 1, frame.contentY - 1, frame.contentX + frame.contentW + 1, revealBottom);
+            drawTabs(ctx);
+            if (revealBottom > gridY) {
+                // Cards are clipped right under the shelf line, not at the top of the card area: at
+                // rest there is a gap between the line and the first card, and a scrolled card
+                // slides up through that gap and disappears under the line itself.
+                int top = shelfY() + 1;
+                ctx.enableScissor(gridX - 1, top, gridX + gridW + 1, Math.min(gridY + gridH, revealBottom));
+                for (FeatureRow row : activeRows()) row.render(ctx, hx, hy);
+                ctx.disableScissor();
+                // The shelf: one ink rule across the whole content width, level with the bottom edge
+                // of the tabs. Only while the list is scrolled down - it marks the edge cards are
+                // disappearing under, so with nothing scrolled off there is nothing for it to mark.
+                if (scroll > 0) {
+                    ctx.fill(frame.contentX, shelfY(), frame.contentX + frame.contentW, shelfY() + 1, Theme.INK);
+                }
+            }
+            drawSignature(ctx);   // after the cards, so it is always on top of them
+            ctx.disableScissor();
+        }
+
+        if (!overlaid && FeatureRow.hoveredNote != null && mouseY < revealBottom
+            && mouseY >= gridY && mouseY < gridY + gridH) {
+            drawNoteTooltip(ctx, FeatureRow.hoveredNote, mouseX, mouseY);
+        }
+
+        for (Widget overlay : new ArrayList<>(overlays)) {
+            overlay.layout(0, 0, this.width);
+            overlay.render(ctx, mouseX, mouseY);
+        }
+    }
+
+    /** Warning tooltip for a card's "!" badge: the old note strip's look (tan, oxblood left edge)
+     * as a floating panel beside the cursor, kept inside the window. */
+    private void drawNoteTooltip(DrawContext ctx, String text, int mouseX, int mouseY) {
+        NoteTooltip.draw(ctx, text, mouseX, mouseY, this.width, this.height);
+    }
+
+    private void drawTabs(DrawContext ctx) {
+        int bottom = tabBottom();
+        for (int i = 0; i < TABS.length; i++) {
+            boolean active = TABS[i] == activeTab;
+            int pad = active ? TAB_PAD_X_ACTIVE : TAB_PAD_X;
+            int tw = tabWidth(i), th = tabHeight(i);
+            int tx = tabX(i), ty = bottom - th;
+
+            if (active) {
+                Draw.bevel4(ctx, tx, ty, tw, th, Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE,
+                    Theme.OXBLOOD_LIT_SIDE, Theme.OXBLOOD_SHADE_SIDE, Theme.INK);
+            } else {
+                Draw.bevel4(ctx, tx, ty, tw, th, Theme.TAB_OFF, Theme.TAB_OFF_LIT, Theme.TAB_OFF_SHADE,
+                    Theme.TAB_OFF_LIT, Theme.TAB_OFF_SHADE, Theme.INK);
+            }
+
+            int rivet = active ? Theme.RIVET_ON : Theme.RIVET_OFF;
+            int cy = ty + th / 2;
+            Draw.rivet(ctx, tx + pad + 1, cy, rivet);
+            Draw.rivet(ctx, tx + tw - pad - 2, cy, rivet);
+
+            int textH = Fonts.height(Fonts.TITLE);
+            Fonts.draw(ctx, TAB_LABELS[i], tx + pad + RIVET_W + TAB_RIVET_GAP, ty + (th - textH) / 2,
+                active ? Theme.TAB_ON_TEXT : Theme.TAB_OFF_TEXT, Fonts.TITLE);
+        }
+
+    }
+
+    /** The makers' signature, signed in script at the bottom right of the sheet. */
+    private void drawSignature(DrawContext ctx) {
+        int bottom = frame.contentY + frame.contentH;
+        int right = frame.contentX + frame.contentW;
+        if (Fonts.scriptAvailable()) {
+            // The final letter's swash overhangs the measured width, and the content area is clipped
+            // at its right edge - so keep the signature a few pixels in from it.
+            int sigW = Fonts.scriptWidth(SIGNATURE);
+            int sigX = right - SIGN_RIGHT_INSET - sigW;
+            int sigY = bottom - SIGN_BOTTOM_MARGIN - SIGN_DROP;
+            // One even patch of plain parchment behind the whole signature: the sheet's lighter and
+            // darker blotches would otherwise put a different colour behind each name.
+            ctx.fill(sigX - 4, sigY - SIGN_RISE - 2, right, sigY + SIGN_DROP + 2, Theme.PARCHMENT);
+            Fonts.drawScript(ctx, SIGNATURE, sigX, sigY, Theme.INK);
+        } else {
+            Fonts.draw(ctx, SIGNATURE, right - Fonts.width(SIGNATURE), bottom - (FOOTER_H + Fonts.GLYPH_H) / 2, Theme.INK);
+        }
+    }
+
+    // ==============================
+    // Overlay host
+    // ==============================
+
+    @Override public void openOverlay(Widget overlay) { overlays.add(overlay); }
+
+    /** Removes the overlay and everything stacked above it, unfocusing each one on the way out.
+     * The unfocus is what lets a closed overlay reset its owner's state — a Dropdown's list
+     * clears the owning Dropdown's {@code open} flag (so its caret stops pointing up) and a
+     * Dialog commits any focused field in its body — no matter how the overlay was dismissed:
+     * by its own click, by Escape, by a Dialog below it closing, or by the screen closing. */
+    @Override public void closeOverlay(Widget overlay) {
+        int i = overlays.indexOf(overlay);
+        if (i < 0) return;
+        while (overlays.size() > i) overlays.remove(overlays.size() - 1).unfocus();
+    }
+
+    @Override public int screenWidth() { return this.width; }
+
+    @Override public int screenHeight() { return this.height; }
+
+    @Override public void closeScreen() { this.close(); }
+
+    private Widget topOverlay() {
+        return overlays.isEmpty() ? null : overlays.get(overlays.size() - 1);
+    }
+
+    // ==============================
+    // Input
+    // ==============================
+
     @Override
     public boolean mouseClicked(Click click, boolean doubled) {
+        Widget top = topOverlay();
+        if (top != null) {
+            top.mouseClicked(click.x(), click.y(), click.button());
+            return true;
+        }
+        double mx = click.x(), my = click.y();
+        layoutGrid();
+
+        // A non-left click exists here only so a listening KeyChip can bind a mouse button: it
+        // goes straight to the rows through the same grid/reveal gate as a left click, but with
+        // no tab handling and neither the commit-before-apply pre-pass nor the post-consume
+        // sweep — a right click must not commit a focused field, and must not cancel the chip
+        // that is waiting for it.
         if (click.button() != 0) {
+            if (inGrid(mx, my)) {
+                for (FeatureRow row : activeRows()) {
+                    if (row.mouseClicked(mx, my, click.button())) return true;
+                }
+            }
             return super.mouseClicked(click, doubled);
         }
 
-        int mouseX = (int) click.x();
-        int mouseY = (int) click.y();
-
-        // Sound editor overlay captures all clicks when open
-        if (SoundEditorOverlay.isOpen()) {
-            SoundEditorOverlay.onClick(mouseX, mouseY);
-            return true;
-        }
-
-        int tabCount = 3;
-        int gap = 8;
-        int tabWidth = (this.tabsWidth - gap * (tabCount - 1)) / tabCount;
-        Tab[] tabs = new Tab[]{Tab.QOL, Tab.NODE_FARMING, Tab.RIFT};
-        for (int i = 0; i < tabs.length; i++) {
-            int tabX = this.tabsX + i * (tabWidth + gap);
-            if (isInside(mouseX, mouseY, tabX, this.tabsY, tabWidth, this.tabsHeight)) {
-                this.activeTab = tabs[i];
-                this.scrollOffset = 0;
-                IslesClient.playMenuClickSound();
-                return true;
-            }
-        }
-
-        if (onFeatureCardClicked(mouseX, mouseY)) {
-            IslesClient.playMenuClickSound();
-            return true;
-        }
-
-        return super.mouseClicked(click, doubled);
-    }
-
-    private boolean onFeatureCardClicked(int mouseX, int mouseY) {
-        // Ignore clicks outside the content area
-        if (!isInside(mouseX, mouseY, this.contentX, this.contentY, this.contentWidth, this.contentHeight)) return false;
-
-        int cardsPerRow = 2;
-        int gap = 10;
-        int cardWidth = (this.contentWidth - gap) / cardsPerRow;
-        int cardHeight = 44;
-
-        List<FeatureCard> activeCards = cards.getActiveCards(activeTab);
-        int[] rowHeights = computeRowHeights(activeCards, cardsPerRow);
-
-        for (int i = 0; i < activeCards.size(); i++) {
-            FeatureCard card = activeCards.get(i);
-            int row = i / cardsPerRow;
-            int col = i % cardsPerRow;
-            int x = this.contentX + col * (cardWidth + gap);
-            int y = this.contentY + rowY(rowHeights, row, gap) - scrollOffset;
-
-            if (card.controlType == FeatureCard.ControlType.EXPANDABLE) {
-                boolean expanded = expandedCards.contains(card);
-                int h = expanded ? getExpandedCardHeight(card) : cardHeight;
-                if (!isInside(mouseX, mouseY, x, y, cardWidth, h)) continue;
-
-                if (card.isKilled()) return true;
-
-                // Toggle button (not shown for keybinds card)
-                if (!card.isKeybindsCard) {
-                    int toggleW = 42, toggleH = 16;
-                    int tx = x + cardWidth - toggleW - 10;
-                    int ty = y + (cardHeight - toggleH) / 2;
-                    if (isInside(mouseX, mouseY, tx, ty, toggleW, toggleH)) {
-                        card.toggle();
-                        return true;
-                    }
-                }
-
-                // Body interactions
-                if (expanded && mouseY >= y + cardHeight) {
-                    int bodyY = y + cardHeight + 6;
-
-                    // Item list cards delegate all body clicks to GroundItemsCardRenderer
-                    if (card.isItemListCard) {
-                        return GroundItemsCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
-                    }
-                    if (card.isBossListCard) {
-                        return BossTrackerCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
-                    }
-                    if (card.isAutoPartyCard) {
-                        return AutoPartyCardRenderer.onClick(mouseX, mouseY, x + 8, bodyY, cardWidth - 16);
-                    }
-
-                    if (card.expandOptions != null && card.optionTogglers != null) {
-                        for (int j = 0; j < card.expandOptions.length; j++) {
-                            int optY = bodyY + j * 18;
-                            int cbSize = 12;
-                            int cbX = x + cardWidth - cbSize - 14;
-                            int cbY = optY + (18 - cbSize) / 2;
-                            if (isInside(mouseX, mouseY, cbX, cbY, cbSize, cbSize)) {
-                                card.optionTogglers[j].run();
-                                return true;
-                            }
-                        }
-                        bodyY += card.expandOptions.length * 18;
-                    }
-
-                    bodyY += 6;
-                    if (card.soundConfigSupplier != null) {
-                        int labelW = this.textRenderer.getWidth("Sound:");
-                        int btnX = x + 14 + labelW + 6;
-                        int btnY = bodyY + 5;
-                        if (isInside(mouseX, mouseY, btnX, btnY, 80, 14)) {
-                            SoundEditorOverlay.open(
-                                card.soundConfigSupplier,
-                                card.soundConfigSetter,
-                                card.defaultSoundConfig,
-                                IslesPlusConfig::save
-                            );
-                            return true;
-                        }
-                    } else if (card.sliderLabel != null && card.sliderConsumer != null) {
-                        int midY = bodyY + 12;
-                        int trackX = x + 14 + this.textRenderer.getWidth(card.sliderLabel) + 8;
-                        int trackW = (x + cardWidth - 14) - trackX;
-                        if (isInside(mouseX, mouseY, trackX, midY - 8, trackW, 16)) {
-                            float val = Math.max(0f, Math.min(1f, (float)(mouseX - trackX) / trackW));
-                            card.sliderConsumer.accept(val);
-                            this.dragSliderTrackX = trackX;
-                            this.dragSliderTrackWidth = trackW;
-                            this.activeSliderConsumer = card.sliderConsumer;
-                            sliderDragging = true;
-                            return true;
-                        }
-                    }
-
-                    return true; // consumed
-                }
-
-                // Header click -> expand/collapse
-                if (expanded) {
-                    expandedCards.remove(card);
-                    GroundItemsCardRenderer.reset(); // clear input state when collapsing
-                    AutoPartyCardRenderer.reset();
-                } else {
-                    expandedCards.add(card);
+        for (int i = 0; i < TABS.length; i++) {
+            int tw = tabWidth(i), tx = tabX(i), ty = tabBottom() - tabHeight(i);
+            if (mx >= tx && mx < tx + tw && my >= ty && my < tabBottom()) {
+                unfocusAll();
+                if (TABS[i] != activeTab) {
+                    activeTab = TABS[i];
+                    scroll = 0;
+                    IslesClient.playMenuClickSound();
                 }
                 return true;
             }
+        }
 
-            if (isInside(mouseX, mouseY, x, y, cardWidth, cardHeight)) {
-                if (!card.isKilled()) card.toggle();
-                return true;
+        // Commit before apply: a focused field in a row the click cannot belong to gives up
+        // focus (and so commits its draft) before any control under the point acts on it.
+        List<FeatureRow> list = activeRows();
+        for (FeatureRow row : list) if (!row.contains(mx, my)) row.unfocus();
+
+        FeatureRow consumer = null;
+        if (inGrid(mx, my)) {
+            for (FeatureRow row : list) {
+                if (row.mouseClicked(mx, my, 0)) { consumer = row; break; }
             }
         }
-        return false;
-    }
-
-    @Override
-    public boolean charTyped(CharInput input) {
-        if (GroundItemsCardRenderer.onChar(input)) return true;
-        if (AutoPartyCardRenderer.onChar(input)) return true;
-        return super.charTyped(input);
-    }
-
-    @Override
-    public boolean keyPressed(KeyInput input) {
-        if (GroundItemsCardRenderer.onKey(input)) return true;
-        if (AutoPartyCardRenderer.onKey(input)) return true;
-        return super.keyPressed(input);
+        // Post-consume sweep: catches an overlapping row that contains the point but was not
+        // the one that consumed the click, and unfocuses everything when nothing consumed it.
+        for (FeatureRow row : list) if (row != consumer) row.unfocus();
+        return consumer != null || super.mouseClicked(click, doubled);
     }
 
     @Override
     public boolean mouseDragged(Click click, double deltaX, double deltaY) {
-        if (SoundEditorOverlay.isOpen() && SoundEditorOverlay.onMouseDragged(click.x(), click.y())) {
+        Widget top = topOverlay();
+        if (top != null) {
+            top.mouseDragged(click.x(), click.y());
             return true;
         }
-        if (sliderDragging && activeSliderConsumer != null && dragSliderTrackWidth > 0) {
-            float val = Math.max(0f, Math.min(1f, (float)(click.x() - dragSliderTrackX) / dragSliderTrackWidth));
-            activeSliderConsumer.accept(val);
-            return true;
+        for (FeatureRow row : activeRows()) {
+            if (row.mouseDragged(click.x(), click.y())) return true;
         }
         return super.mouseDragged(click, deltaX, deltaY);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
-        if (SoundEditorOverlay.isOpen()) return true;
-        int step = 20;
-        scrollOffset -= (int)(verticalAmount * step);
-        scrollOffset = Math.max(0, Math.min(scrollOffset, getMaxScroll()));
-        return true;
-    }
-
-    private int getMaxScroll() {
-        List<FeatureCard> activeCards = cards.getActiveCards(activeTab);
-        int cardsPerRow = 2;
-        int gap = 10;
-        int[] rowHeights = computeRowHeights(activeCards, cardsPerRow);
-        int totalH = 0;
-        for (int h : rowHeights) totalH += h + gap;
-        if (rowHeights.length > 0) totalH -= gap; // no trailing gap
-        return Math.max(0, totalH - contentHeight);
-    }
-
-    @Override
     public boolean mouseReleased(Click click) {
-        SoundEditorOverlay.onMouseReleased();
-        if (activeSliderConsumer != null) {
-            IslesPlusConfig.save();
+        Widget top = topOverlay();
+        if (top != null) {
+            top.mouseReleased();
+            return true;
         }
-        sliderDragging = false;
-        activeSliderConsumer = null;
+        for (FeatureRow row : activeRows()) row.mouseReleased();
         return super.mouseReleased(click);
     }
 
     @Override
-    public void close() {
-        GroundItemsCardRenderer.reset();
-        AutoPartyCardRenderer.reset();
-        SoundEditorOverlay.close();
-        if (this.client != null) {
-            this.client.setScreen(null);
+    public boolean mouseScrolled(double mouseX, double mouseY, double horizontalAmount, double verticalAmount) {
+        Widget top = topOverlay();
+        if (top != null) {
+            top.mouseScrolled(mouseX, mouseY, verticalAmount);
+            return true;
+        }
+        for (FeatureRow row : activeRows()) {
+            if (row.mouseScrolled(mouseX, mouseY, verticalAmount)) return true;
+        }
+        // Precision trackpads send many tiny deltas; truncating each to a whole pixel drops them all,
+        // so the fraction is carried over to the next event.
+        scrollRemainder += verticalAmount * SCROLL_STEP;
+        int whole = (int) scrollRemainder;
+        scrollRemainder -= whole;
+        scroll = Math.max(0, Math.min(scroll - whole, maxScroll()));
+        return true;
+    }
+
+    @Override
+    public boolean keyPressed(KeyInput input) {
+        Widget top = topOverlay();
+        if (top != null) {
+            if (!top.keyPressed(input) && input.key() == GLFW.GLFW_KEY_ESCAPE) closeOverlay(top);
+            return true;
+        }
+        for (FeatureRow row : activeRows()) {
+            if (row.keyPressed(input)) { konami.reset(); return true; }   // typing in a field is not the code
+        }
+        // Not while typing (a focused field does not consume arrows or letters, so its keys would
+        // count), and not with Ctrl/Alt/Shift held (Ctrl+A is "select all", not an A).
+        if (TextField.anyFocused() || input.modifiers() != 0) {
+            konami.reset();
+        } else if (konami.feed(input.key())) {
+            IslesClient.playMenuClickSound();
+            SecretPage.open(this, frame.contentW);
+            return true;
+        }
+        return super.keyPressed(input);
+    }
+
+    @Override
+    public boolean charTyped(CharInput input) {
+        Widget top = topOverlay();
+        if (top != null) {
+            top.charTyped(input);
+            return true;
+        }
+        for (FeatureRow row : activeRows()) {
+            if (row.charTyped(input)) return true;
+        }
+        return super.charTyped(input);
+    }
+
+    private void unfocusAll() {
+        for (List<FeatureRow> list : rows.values()) {
+            for (FeatureRow row : list) row.unfocus();
         }
     }
 
-    private static boolean isInside(int mouseX, int mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+    /** Also reached when something else replaces the screen (the server opening a menu, a
+     * disconnect): anything still being typed is committed and saved, exactly as on close(). */
+    @Override
+    public void removed() {
+        unfocusAll();
+        for (Widget overlay : new ArrayList<>(overlays)) overlay.unfocus();
+        IslesPlusConfig.save();
+        super.removed();
+    }
+
+    @Override
+    public void close() {
+        unfocusAll();
+        // Copy first: an overlay's unfocus() commits a draft, and a commit is free to reach back
+        // into the host. Same reason the render loop iterates a copy.
+        for (Widget overlay : new ArrayList<>(overlays)) overlay.unfocus();
+        overlays.clear();
+        if (this.client != null) this.client.setScreen(null);
     }
 }

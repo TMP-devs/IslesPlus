@@ -27,7 +27,7 @@ public final class OwnerRepository {
     private static final String JSON_URL = "https://tmp-devs.github.io/islesplusjson/people.json";
     private static final String SIG_URL  = "https://tmp-devs.github.io/islesplusjson/people.json.sig";
 
-    /** RSA-2048 public key, DER-encoded then Base64. Private key lives in GitHub Actions secrets only. */
+    /** RSA-2048 public key (DER then base64). private half only exists in github actions secrets */
     private static final String PUBLIC_KEY_B64 =
         "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoIrh8/O4/OVov507+Ble" +
         "+4DDA+BFkQaRFYJSEYIcUPB2K7dlau1PorFl/rQ1Dhc5674jz6Af5ndJtqq199A/" +

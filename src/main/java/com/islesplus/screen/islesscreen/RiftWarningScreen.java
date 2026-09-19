@@ -1,21 +1,24 @@
 package com.islesplus.screen.islesscreen;
 
+import com.islesplus.ui.Draw;
+import com.islesplus.ui.Flow;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Metrics;
+import com.islesplus.ui.Theme;
+import com.islesplus.ui.widgets.Button;
+import com.islesplus.ui.widgets.CheckChip;
+import com.islesplus.ui.widgets.Label;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.OrderedText;
 import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-
-import java.util.List;
 
 class RiftWarningScreen extends Screen {
-    private static final int DIALOG_W = 270;
-    private static final int DIALOG_H = 148;
+    private static final int DIALOG_W = 300;
+    private static final int PAD = 7;
 
-    private static final Text TITLE = Text.literal("[ ! ]  Heads Up")
-        .formatted(Formatting.RED, Formatting.BOLD);
+    private static final String TITLE = "HEADS UP";
     private static final String BODY =
         "Rift features provide gameplay assistance that may affect your " +
         "experience. The Rift is designed to be discovered naturally. " +
@@ -23,72 +26,81 @@ class RiftWarningScreen extends Screen {
 
     private final Screen parent;
     private final Runnable onConfirm;
+    private final Flow.Column body;
     private boolean dontShowAgain = false;
+
+    private int panelX, panelY, panelW, panelH;
 
     RiftWarningScreen(Screen parent, Runnable onConfirm) {
         super(Text.empty());
         this.parent = parent;
         this.onConfirm = onConfirm;
+        this.body = new Flow.Column(9)
+            .add(new Label(BODY, Theme.TEXT_LABEL, Fonts.TITLE).wrap())
+            .add(new CheckChip("Don't show this again", () -> dontShowAgain, () -> dontShowAgain = !dontShowAgain))
+            .add(new Flow.WrapRow(6, 4)
+                .add(new Button("CANCEL", Button.Kind.QUIET, () -> MinecraftClient.getInstance().setScreen(parent)).fill())
+                .add(new Button("ENABLE", Button.Kind.PRIMARY, () -> {
+                    if (dontShowAgain) RiftWarningManager.setDismissed();
+                    onConfirm.run();
+                    MinecraftClient.getInstance().setScreen(parent);
+                }).fill()));
     }
 
     @Override
     protected void init() {
         super.init();
-        int dx = (width  - DIALOG_W) / 2;
-        int dy = (height - DIALOG_H) / 2;
-
-        addDrawableChild(ButtonWidget.builder(dontShowLabel(), btn -> {
-            dontShowAgain = !dontShowAgain;
-            btn.setMessage(dontShowLabel());
-        }).dimensions(dx + (DIALOG_W - 170) / 2, dy + DIALOG_H - 46, 170, 16).build());
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Cancel"), btn -> {
-            MinecraftClient.getInstance().setScreen(parent);
-        }).dimensions(dx + 8, dy + DIALOG_H - 26, 80, 18).build());
-
-        addDrawableChild(ButtonWidget.builder(Text.literal("Enable"), btn -> {
-            if (dontShowAgain) RiftWarningManager.setDismissed();
-            onConfirm.run();
-            MinecraftClient.getInstance().setScreen(parent);
-        }).dimensions(dx + DIALOG_W - 88, dy + DIALOG_H - 26, 80, 18).build());
+        Fonts.resetFallbackCheck();
     }
 
-    private Text dontShowLabel() {
-        return Text.literal((dontShowAgain ? "[x]" : "[ ]") + " Don't show this again")
-            .formatted(Formatting.GRAY);
+    /** Idempotent: recomputes the panel bounds and lays out the body Column inside it. Called
+     * every frame from render() and again before hit-testing in mouseClicked(). */
+    private void layoutPanel() {
+        panelW = Math.min(DIALOG_W, width - 20);
+        int bodyWidth = Math.max(0, panelW - 2 * PAD);
+
+        // Measuring pass: layout() must be idempotent, so a placeholder position is safe here.
+        int bodyH = body.layout(0, 0, bodyWidth);
+        panelH = Metrics.DIALOG_TITLE_H + bodyH + 2 * PAD;
+        panelX = (width - panelW) / 2;
+        panelY = (height - panelH) / 2;
+
+        // Final pass at the real position.
+        int bodyX = panelX + PAD, bodyY = panelY + Metrics.DIALOG_TITLE_H + PAD;
+        body.layout(bodyX, bodyY, bodyWidth);
     }
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
-        ctx.fill(0, 0, width, height, 0x88000000);
+        ctx.fill(0, 0, width, height, Theme.SCRIM);
+        layoutPanel();
 
-        int dx = (width  - DIALOG_W) / 2;
-        int dy = (height - DIALOG_H) / 2;
+        ctx.fill(panelX, panelY + 5, panelX + panelW, panelY + panelH + 5, Theme.DROP_SHADOW);
+        Draw.bevel4(ctx, panelX, panelY, panelW, panelH,
+            Theme.SURFACE, Theme.SURFACE_LIT, Theme.SURFACE_SHADE, Theme.SURFACE_LIT_SIDE, Theme.SURFACE_SHADE_SIDE, Theme.INK);
+        Draw.ring(ctx, panelX - 1, panelY - 1, panelW + 2, panelH + 2, Theme.INK);
 
-        // Background
-        ctx.fill(dx, dy, dx + DIALOG_W, dy + DIALOG_H, 0xFF111120);
+        Draw.bevel(ctx, panelX, panelY, panelW, Metrics.DIALOG_TITLE_H,
+            Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK);
 
-        // Border
-        ctx.fill(dx,                dy,                dx + DIALOG_W,     dy + 1,            0xFFCC3333);
-        ctx.fill(dx,                dy + DIALOG_H - 1, dx + DIALOG_W,     dy + DIALOG_H,     0xFFCC3333);
-        ctx.fill(dx,                dy,                dx + 1,            dy + DIALOG_H,     0xFFCC3333);
-        ctx.fill(dx + DIALOG_W - 1, dy,                dx + DIALOG_W,     dy + DIALOG_H,     0xFFCC3333);
+        int textH = Fonts.height(Fonts.BODY);
+        Fonts.drawCentered(ctx, TITLE, panelX + panelW / 2, panelY + (Metrics.DIALOG_TITLE_H - textH) / 2, Theme.CREAM, Fonts.BODY);
 
-        // Title
-        ctx.drawCenteredTextWithShadow(textRenderer, TITLE, width / 2, dy + 10, 0xFFFFFF);
+        body.render(ctx, mouseX, mouseY);
+    }
 
-        // Divider
-        ctx.fill(dx + 8, dy + 22, dx + DIALOG_W - 8, dy + 23, 0x44FFFFFF);
+    @Override
+    public boolean mouseClicked(Click click, boolean doubled) {
+        if (click.button() != 0) return super.mouseClicked(click, doubled);
+        layoutPanel();
+        body.mouseClicked(click.x(), click.y(), click.button());
+        return true;
+    }
 
-        // Body text
-        List<OrderedText> lines = textRenderer.wrapLines(Text.literal(BODY), DIALOG_W - 20);
-        int ty = dy + 29;
-        for (OrderedText line : lines) {
-            ctx.drawText(textRenderer, line, dx + 10, ty, 0xFFBBBBBB, true);
-            ty += textRenderer.fontHeight + 2;
-        }
-
-        super.render(ctx, mouseX, mouseY, delta);
+    @Override
+    public boolean mouseReleased(Click click) {
+        body.mouseReleased();
+        return super.mouseReleased(click);
     }
 
     @Override

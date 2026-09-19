@@ -48,10 +48,9 @@ public class NodeRadiusRenderer {
     }
 
     /**
-     * Scans the column at (x, z) from a few blocks above baseY downward,
-     * returning the Y of the first air block that has a non-air block directly
-     * below it - i.e. the nearest floor to the node. Works for caves, surfaces,
-     * and multi-level structures. Returns Integer.MIN_VALUE if nothing is found.
+     * walks down the column at (x, z) starting a bit above baseY and returns the y of
+     * the first air block sitting on something solid, aka the floor nearest the node.
+     * works in caves, on the surface, multi floor builds etc. Integer.MIN_VALUE if nothing
      */
     private static int findFloorY(ClientWorld world, BlockPos.Mutable mutable, int x, int baseY, int z) {
         for (int y = baseY + FLOOR_SEARCH_ABOVE; y >= baseY - FLOOR_SEARCH_BELOW; y--) {

@@ -1,6 +1,6 @@
 package com.islesplus.sound;
 
-/** Stores a fully customizable sound: which sound, at what volume and pitch. */
+/** one configurable sound: which one, how loud, what pitch */
 public final class SoundConfig {
     public String soundId;
     public float volume;

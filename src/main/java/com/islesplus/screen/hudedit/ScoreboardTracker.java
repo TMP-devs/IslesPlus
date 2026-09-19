@@ -1,8 +1,8 @@
 package com.islesplus.screen.hudedit;
 
 /**
- * Stores the last-known rendered bounds of the sidebar scoreboard.
- * Updated every frame by {@code InGameHudScoreboardMixin}.
+ * where the sidebar scoreboard was drawn last frame.
+ * {@code InGameHudScoreboardMixin} updates this every frame
  */
 public final class ScoreboardTracker {
     public static boolean valid  = false;

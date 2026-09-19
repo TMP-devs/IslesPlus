@@ -20,7 +20,7 @@ public final class RemoteDataSync {
 
     private RemoteDataSync() {}
 
-    /** Refreshes all remote/GitHub-backed datasets. Returns true if at least one refresh started. */
+    /** kicks off a refresh of everything we pull from github. true if at least one actually started */
     public static boolean refreshNowAsync() {
         boolean plushies = PlushieRepository.refreshRemoteDataNowAsync();
         boolean rifts = RiftRepository.refreshRemoteDataNowAsync();
@@ -31,8 +31,8 @@ public final class RemoteDataSync {
     }
 
     /**
-     * Fetches all datasets synchronously in parallel. Returns true only if ALL succeed.
-     * Call from a background thread only - this blocks until all fetches complete.
+     * fetches everything in parallel and blocks until they're all done. true only if ALL succeed.
+     * don't call this on the render thread
      */
     public static boolean refreshAllSync() {
         CompletableFuture<Boolean> plushies = CompletableFuture.supplyAsync(PlushieRepository::refreshSync, EXECUTOR);

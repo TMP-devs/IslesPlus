@@ -27,7 +27,7 @@ public final class PlushieRepository {
     private static final double CLOSEST_POS_EPSILON_SQ = 1.0; // 1 block squared
 
     private static volatile List<PlushieEntry> cachedPlushies = Collections.emptyList();
-    /** Thread-safe set of owned plushie numbers. No upper bound - grows with game updates. */
+    /** plushie numbers we own. thread safe, no max since they keep adding more */
     private static final Set<Integer> owned = ConcurrentHashMap.newKeySet();
     private static long closestComputedAtMs = 0L;
     private static PlushieEntry closestCached = null;
@@ -36,7 +36,7 @@ public final class PlushieRepository {
 
     private PlushieRepository() {}
 
-    /** Call once on client startup. Loads local data, then fetches fresh data in background. */
+    /** call once on startup. loads the cached file then grabs a fresh copy in the background */
     public static void init() {
         loadOwned();
         List<PlushieEntry> local = parseJson(readFile(CACHE_PATH));
@@ -44,11 +44,11 @@ public final class PlushieRepository {
             cachedPlushies = List.copyOf(local);
             invalidateClosestCache();
         }
-        // Reuse the same gate used by manual refresh to prevent concurrent fetches.
+        // same gate as manual refresh so we never have two fetches going
         refreshRemoteDataNowAsync();
     }
 
-    /** Triggers a one-time background refresh from GitHub. Returns false if one is already running. */
+    /** background refresh from github. false if one's already running */
     public static boolean refreshRemoteDataNowAsync() {
         if (!refreshInFlight.compareAndSet(false, true)) return false;
         Thread fetcher = new Thread(() -> {
@@ -61,6 +61,11 @@ public final class PlushieRepository {
         fetcher.setDaemon(true);
         fetcher.start();
         return true;
+    }
+
+    /** True while a download of the plushie list is running. */
+    public static boolean isRefreshing() {
+        return refreshInFlight.get();
     }
 
     public static List<PlushieEntry> getCachedPlushies() {
@@ -111,7 +116,7 @@ public final class PlushieRepository {
 
     // -------------------------------------------------------------------------
 
-    /** Synchronous gated refresh. Returns true if fetch succeeded, false if failed or already in flight. */
+    /** blocking refresh. true if it worked, false if it failed or one was already running */
     public static boolean refreshSync() {
         if (!refreshInFlight.compareAndSet(false, true)) return false;
         try {

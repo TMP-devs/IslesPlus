@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 
 @Mixin(ChatHud.class)
 public class ChatHudMixin {
-    // matches valid Minecraft username characters; used to scan tokens before separator
+    // valid mc username chars, used to pull names out of the bit before the »
     private static final Pattern TOKEN = Pattern.compile("[a-zA-Z0-9_]+");
     private static final String CHAT_SEPARATOR = "\u00BB";
     private static final Text OWNER_PREFIX = Text.empty()
@@ -45,7 +45,7 @@ public class ChatHudMixin {
         int sepIdx = plain.indexOf(CHAT_SEPARATOR);
         if (sepIdx < 0) return;
 
-        // If any token left of the separator is an owner, prepend a marker and keep original formatting.
+        // if any name left of the » is a dev, stick the [+] tag in front and leave the rest alone
         Matcher m = TOKEN.matcher(plain.substring(0, sepIdx));
         boolean foundOwner = false;
         while (m.find()) {

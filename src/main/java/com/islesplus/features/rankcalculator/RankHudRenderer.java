@@ -2,6 +2,8 @@ package com.islesplus.features.rankcalculator;
 
 import com.islesplus.screen.hudedit.ScoreboardTracker;
 import com.islesplus.sync.FeatureFlags;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Theme;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.minecraft.client.MinecraftClient;
@@ -10,8 +12,16 @@ import net.minecraft.client.gui.DrawContext;
 import net.minecraft.util.Identifier;
 
 public final class RankHudRenderer {
+    /** Drawn size in GUI pixels; the badge art itself is 128x128 so it stays sharp at GUI scale 2+. */
     private static final int TEXTURE_SIZE = 64;
+    private static final int ART_SIZE = 128;
     private static final int GAP = 4;
+    private static final int LINE_GAP = 3;
+    /** The badge (with its S animation) is drawn at 80%; the text above it stays at full size so
+     * it keeps its whole-pixel snapping and reads crisply. */
+    private static final float BADGE_SCALE = 0.8f;
+    /** Slightly larger than body text so it reads at a glance mid-run. */
+    private static final float TEXT_SCALE = Fonts.TITLE;
 
     private static final Identifier RANK_S = Identifier.of("islesplus", "textures/rank/tier_s.png");
     private static final Identifier RANK_A = Identifier.of("islesplus", "textures/rank/tier_a.png");
@@ -26,51 +36,73 @@ public final class RankHudRenderer {
     public static void render(DrawContext context, MinecraftClient client) {
         if (!RankCalculator.rankCalculatorEnabled || WorldIdentification.world != PlayerWorld.RIFT || FeatureFlags.isKilled("rank_calculator")) return;
         if (!ScoreboardTracker.valid) return;
+        renderAt(context, ScoreboardTracker.x, ScoreboardTracker.y, ScoreboardTracker.width,
+            RankCalculator.showPlayerCount, RankCalculator.showRankDropTimer);
+    }
 
-        Identifier texture = getTexture(RankCalculator.lastRank);
-        if (texture == null) return;
+    private static void renderAt(DrawContext context, int sbX, int sbY, int sbW, boolean playerCount, boolean dropTimer) {
+        if (getTexture(RankCalculator.lastRank) == null) return;
+        int size = Math.round(TEXTURE_SIZE * BADGE_SCALE);
+        int centerX = sbX + sbW / 2;
+        int x = centerX - size / 2;
+        int y = Math.max(0, sbY - size - GAP);
 
-        int x = ScoreboardTracker.x + ScoreboardTracker.width / 2 - TEXTURE_SIZE / 2;
-        int y = ScoreboardTracker.y - TEXTURE_SIZE - GAP;
-        if (y < 0) y = 0;
-
-        context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, x, y, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE, TEXTURE_SIZE);
-
-        // Show player count above icon if enabled
-        int textLineY = y - client.textRenderer.fontHeight - 2;
-        if (RankCalculator.showPlayerCount) {
-            String pcLabel = RankCalculator.playerCount + " players";
-            int pcW = client.textRenderer.getWidth(pcLabel);
-            context.drawTextWithShadow(client.textRenderer, pcLabel,
-                x + TEXTURE_SIZE / 2 - pcW / 2, textLineY, 0xFF888888);
-            textLineY -= client.textRenderer.fontHeight + 2;
+        // drawBadge works in a 64 px box; shrink that box onto (x, y, size).
+        context.getMatrices().pushMatrix();
+        try {
+            context.getMatrices().translate((float) x, (float) y);
+            context.getMatrices().scale(size / (float) TEXTURE_SIZE, size / (float) TEXTURE_SIZE);
+            drawBadge(context, 0, 0, RankCalculator.lastRank);
+        } finally {
+            context.getMatrices().popMatrix();
         }
 
-        // Show countdown timer above the icon when at S rank
-        int secsLeft = RankCalculator.getSecondsUntilDemotion();
+
+        drawText(context, centerX, y,
+            playerCount ? RankCalculator.playerCount : -1,
+            RankCalculator.getSecondsUntilDemotion(), RankCalculator.getNextRank(),
+            RankCalculator.getPointsUntilPromotion(),
+            dropTimer ? RankCalculator.getSecondsUntilRankDrop() : -1);
+    }
+
+    private static void drawBadge(DrawContext context, int x, int y, String rank) {
+        Identifier texture = getTexture(rank);
+        if (texture == null) return;
+        boolean shimmer = texture == RANK_S;
+        if (shimmer) SRankShimmer.renderBehind(context, x, y);
+        context.drawTexture(RenderPipelines.GUI_TEXTURED, texture, x, y, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE,
+            ART_SIZE, ART_SIZE, ART_SIZE, ART_SIZE);
+        if (shimmer) SRankShimmer.renderOver(context, x, y);
+    }
+
+    /** Text lines stack upward from the badge: Silkscreen in the HUD tones with the Isles+ drop
+     * shadow, no panel.
+     * Pass -1 (or a null nextRank) for a line that should not show. */
+    private static void drawText(DrawContext context, int centerX, int y, int playerCount, int secsLeft,
+                                 String nextRank, int ptsNeeded, int dropSecs) {
+        int textLineY = y - Fonts.height(TEXT_SCALE) - LINE_GAP;
+        if (playerCount >= 0) {
+            String pcLabel = playerCount + (playerCount == 1 ? " player" : " players");
+            Fonts.drawShadowed(context, pcLabel, centerX - Fonts.width(pcLabel, TEXT_SCALE) / 2, textLineY, Theme.HUD_MUTED, TEXT_SCALE);
+            textLineY -= Fonts.height(TEXT_SCALE) + LINE_GAP;
+        }
+
+        // Countdown until the S is lost
         if (secsLeft >= 0) {
             String timer = String.format("%d:%02d", secsLeft / 60, secsLeft % 60);
-            int textWidth = client.textRenderer.getWidth(timer);
-            int color = secsLeft > 60 ? 0xFFD4AF37 : secsLeft > 30 ? 0xFFFFAA00 : 0xFFE74C3C;
-            context.drawTextWithShadow(client.textRenderer, timer,
-                x + TEXTURE_SIZE / 2 - textWidth / 2, textLineY, color);
+            int color = secsLeft > 60 ? Theme.HUD_GOOD : secsLeft > 30 ? Theme.HUD_WARN : Theme.HUD_ALERT;
+            Fonts.drawShadowed(context, timer, centerX - Fonts.width(timer, TEXT_SCALE) / 2, textLineY, color, TEXT_SCALE);
         }
 
-        // Show points needed for next rank when below S
-        String nextRank = RankCalculator.getNextRank();
-        int ptsNeeded = RankCalculator.getPointsUntilPromotion();
+        // Points needed for the next grade when below S
         if (nextRank != null) {
             String label = ptsNeeded >= 0 ? "+" + ptsNeeded + " pts for " + nextRank : nextRank + " no longer possible";
-            int color = ptsNeeded >= 0 ? 0xFFD4AF37 : 0xFFE74C3C;
-            int dropSecs = RankCalculator.showRankDropTimer ? RankCalculator.getSecondsUntilRankDrop() : -1;
+            int color = ptsNeeded >= 0 ? Theme.HUD_GOOD : Theme.HUD_ALERT;
             String timerStr = dropSecs >= 0 ? String.format(" %d:%02d", dropSecs / 60, dropSecs % 60) : "";
-            int totalW = client.textRenderer.getWidth(label) + client.textRenderer.getWidth(timerStr);
-            int startX = x + TEXTURE_SIZE / 2 - totalW / 2;
-            context.drawTextWithShadow(client.textRenderer, label, startX, textLineY, color);
-            if (!timerStr.isEmpty()) {
-                context.drawTextWithShadow(client.textRenderer, timerStr,
-                    startX + client.textRenderer.getWidth(label), textLineY, 0xFFE74C3C);
-            }
+            int labelW = Fonts.width(label, TEXT_SCALE);
+            int startX = centerX - (labelW + Fonts.width(timerStr, TEXT_SCALE)) / 2;
+            Fonts.drawShadowed(context, label, startX, textLineY, color, TEXT_SCALE);
+            if (!timerStr.isEmpty()) Fonts.drawShadowed(context, timerStr, startX + labelW, textLineY, Theme.HUD_ALERT, TEXT_SCALE);
         }
     }
 

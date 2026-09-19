@@ -5,6 +5,7 @@ import java.util.UUID;
 public final class TrackedNode {
     public UUID textDisplayUuid;
     public String nodeName;
+    public NodeSkill skill; // null if the label didn't say
     public long firstSeenMs;
     public boolean locked;
     public boolean armed;
@@ -19,6 +20,7 @@ public final class TrackedNode {
     public void resetFor(NodeSnapshot snapshot, long now) {
         textDisplayUuid = snapshot.uuid;
         nodeName = snapshot.nodeName;
+        skill = NodeSkill.fromLabel(snapshot.normalizedText);
         firstSeenMs = now;
         locked = false;
         armed = false;

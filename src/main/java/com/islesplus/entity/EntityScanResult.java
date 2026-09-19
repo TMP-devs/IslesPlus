@@ -25,6 +25,8 @@ public final class EntityScanResult {
     public final List<Entity> armorStands;
     /** Item (dropped) entities within 120 blocks - for GroundItemsNotifier */
     public final List<Entity> itemEntities;
+    /** BlockDisplay entities within 14 blocks - for QteTracker (mining tick skip) */
+    public final List<Entity> blockDisplays;
 
     public EntityScanResult(
         List<Entity> textDisplaysNear,
@@ -36,7 +38,8 @@ public final class EntityScanResult {
         List<Entity> players,
         List<Entity> slimes,
         List<Entity> armorStands,
-        List<Entity> itemEntities
+        List<Entity> itemEntities,
+        List<Entity> blockDisplays
     ) {
         this.textDisplaysNear = textDisplaysNear;
         this.textDisplaysNearDouble = textDisplaysNearDouble;
@@ -48,9 +51,10 @@ public final class EntityScanResult {
         this.slimes = slimes;
         this.armorStands = armorStands;
         this.itemEntities = itemEntities;
+        this.blockDisplays = blockDisplays;
     }
 
     public static final EntityScanResult EMPTY = new EntityScanResult(
-        List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()
+        List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of()
     );
 }

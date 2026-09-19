@@ -1,6 +1,9 @@
 package com.islesplus.features.inventorysearch;
 
 import com.islesplus.sync.FeatureFlags;
+import com.islesplus.ui.Draw;
+import com.islesplus.ui.Fonts;
+import com.islesplus.ui.Theme;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
@@ -16,12 +19,12 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.Slot;
 
 /**
- * Inventory search bar - click to focus, then type to filter items.
- * Text state lives in {@link SearchTextState}, calculator in {@link InventoryCalculator}.
+ * search bar on top of inventories. click it, type, matching items light up.
+ * text stuff is in {@link SearchTextState}, calculator in {@link InventoryCalculator}
  *
- * Search syntax (comma-separated AND terms):
- *   text  - matches item display name
- *   #text - matches item lore and NBT data
+ * syntax (comma separated, all terms have to match):
+ *   text  - item name
+ *   #text - lore / nbt
  */
 public final class InventorySearch {
     public enum SearchBarPosition {
@@ -29,7 +32,7 @@ public final class InventorySearch {
         BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT
     }
 
-    public static boolean inventorySearchEnabled = false;
+    public static boolean inventorySearchEnabled = true;
     public static SearchBarPosition barPosition = SearchBarPosition.TOP_LEFT;
 
     private static final int MARGIN = 4;
@@ -145,65 +148,61 @@ public final class InventorySearch {
 
         // Chevron
         int cx = chevronX(bx);
-        ctx.fill(cx - 1, by - 1, cx + CHEVRON_W, by + BAR_H + 1, 0xFF555555);
-        ctx.fill(cx, by, cx + CHEVRON_W, by + BAR_H, 0xFF1E1E1E);
-        drawChevron(ctx, cx + CHEVRON_W / 2, by + BAR_H / 2, InventoryCalculator.open, 0xFFAAAAAA);
+        Draw.bevel(ctx, cx, by, CHEVRON_W, BAR_H, Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK);
+        Draw.caret(ctx, cx + CHEVRON_W / 2, by + BAR_H / 2,
+                InventoryCalculator.open ? Draw.Dir.DOWN : Draw.Dir.RIGHT, Theme.CREAM);
 
-        // Border + background
-        int borderColor = focused ? 0xFF3A8DDE : 0xFF555555;
-        ctx.fill(bx - 1, by - 1, bx + BAR_W + 1, by,                 borderColor);
-        ctx.fill(bx - 1, by + BAR_H, bx + BAR_W + 1, by + BAR_H + 1, borderColor);
-        ctx.fill(bx - 1, by, bx, by + BAR_H,                          borderColor);
-        ctx.fill(bx + BAR_W, by, bx + BAR_W + 1, by + BAR_H,          borderColor);
-        ctx.fill(bx, by, bx + BAR_W, by + BAR_H, 0xFF1E1E1E);
+        // Bar
+        Draw.bevel(ctx, bx, by, BAR_W, BAR_H, Theme.CALC_NUM, Theme.CALC_NUM_LIT, Theme.CALC_NUM_SHADE,
+                focused ? Theme.OXBLOOD : Theme.INK);
 
         // Text / placeholder
         int textX = bx + 4, textY = by + 4, maxW = BAR_W - 8;
         if (SearchTextState.searchText.isEmpty() && !focused) {
-            ctx.drawText(client.textRenderer, "Search...", textX, textY, 0xFF888888, false);
+            Fonts.draw(ctx, "Search...", textX, textY, Theme.TEXT_META);
         } else {
             renderSearchText(ctx, client, focused, textX, textY, maxW, bx, by);
         }
 
         if (InventoryCalculator.open) {
-            InventoryCalculator.render(ctx, client, bx, by, screen.width, screen.height);
+            InventoryCalculator.render(ctx, bx, by, screen.width, screen.height);
         }
     }
 
     private static void renderSearchText(DrawContext ctx, MinecraftClient client, boolean focused,
                                           int textX, int textY, int maxW, int bx, int by) {
-        int cursorPixel = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.cursorPos));
+        String text = SearchTextState.searchText;
+        int cursorPixel = Fonts.width(text.substring(0, SearchTextState.cursorPos));
         int scrollOffset = cursorPixel > maxW ? cursorPixel - maxW : 0;
 
+        ctx.enableScissor(textX, by, bx + BAR_W - 4, by + BAR_H);
         if (focused && SearchTextState.hasSelection()) {
-            int selStartPx = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.selMin())) - scrollOffset;
-            int selEndPx = client.textRenderer.getWidth(SearchTextState.searchText.substring(0, SearchTextState.selMax())) - scrollOffset;
+            int selMin = SearchTextState.selMin();
+            int selMax = SearchTextState.selMax();
+            String pre = text.substring(0, selMin);
+            String sel = text.substring(selMin, selMax);
+            String post = text.substring(selMax);
+
+            int selStartPx = Fonts.width(pre) - scrollOffset;
+            int selEndPx = Fonts.width(pre + sel) - scrollOffset;
             int hlX1 = Math.max(0, selStartPx) + textX;
             int hlX2 = Math.min(maxW, selEndPx) + textX;
-            if (hlX2 > hlX1) ctx.fill(hlX1, textY - 1, hlX2, textY + client.textRenderer.fontHeight, 0xFF3A6EA5);
-        }
+            if (hlX2 > hlX1) ctx.fill(hlX1, textY - 1, hlX2, textY + client.textRenderer.fontHeight, Theme.OXBLOOD);
 
-        ctx.enableScissor(textX, by, bx + BAR_W - 4, by + BAR_H);
-        ctx.drawText(client.textRenderer, SearchTextState.searchText, textX - scrollOffset, textY, 0xFFFFFFFF, false);
+            int preX = textX - scrollOffset;
+            Fonts.draw(ctx, pre, preX, textY, Theme.INK_DEEP);
+            int selX = preX + Fonts.width(pre);
+            Fonts.draw(ctx, sel, selX, textY, Theme.CREAM);
+            int postX = selX + Fonts.width(sel);
+            Fonts.draw(ctx, post, postX, textY, Theme.INK_DEEP);
+        } else {
+            Fonts.draw(ctx, text, textX - scrollOffset, textY, Theme.INK_DEEP);
+        }
         ctx.disableScissor();
 
         if (focused && (System.currentTimeMillis() % 1000) < 500) {
             int cursorX = textX + cursorPixel - scrollOffset;
-            ctx.fill(cursorX, textY - 1, cursorX + 1, textY + client.textRenderer.fontHeight, 0xFFFFFFFF);
-        }
-    }
-
-    private static void drawChevron(DrawContext ctx, int cx, int cy, boolean down, int color) {
-        if (down) {
-            ctx.fill(cx - 3, cy - 1, cx + 4, cy, color);
-            ctx.fill(cx - 2, cy, cx + 3, cy + 1, color);
-            ctx.fill(cx - 1, cy + 1, cx + 2, cy + 2, color);
-            ctx.fill(cx, cy + 2, cx + 1, cy + 3, color);
-        } else {
-            ctx.fill(cx - 1, cy - 3, cx, cy + 4, color);
-            ctx.fill(cx, cy - 2, cx + 1, cy + 3, color);
-            ctx.fill(cx + 1, cy - 1, cx + 2, cy + 2, color);
-            ctx.fill(cx + 2, cy, cx + 3, cy + 1, color);
+            ctx.fill(cursorX, textY - 1, cursorX + 1, textY + client.textRenderer.fontHeight, Theme.INK_DEEP);
         }
     }
 }

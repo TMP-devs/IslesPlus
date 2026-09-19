@@ -4,6 +4,7 @@ import com.islesplus.IslesPlusConfig;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.entity.EntityScanResult;
+import com.islesplus.ui.GlowColor;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
@@ -18,10 +19,16 @@ public final class SecretFinder {
 
     public static boolean secretFinderEnabled = false;
     public static float glowHue = 0.917f; // hot pink
+    public static float glowSaturation = 1.0f;
+    public static float glowLightness = 0.5f;
     private static volatile Set<Integer> glowingEntityIds = Set.of();
     private static Set<BlockPos> slimeBlockPositions = Set.of();
 
     private SecretFinder() {}
+
+    public static int glowRgb() {
+        return GlowColor.rgb(glowHue, glowSaturation, glowLightness);
+    }
 
     public static void tick(MinecraftClient client, EntityScanResult scan) {
         if (!secretFinderEnabled

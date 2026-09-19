@@ -4,8 +4,8 @@ import net.objecthunter.exp4j.ExpressionBuilder;
 import net.objecthunter.exp4j.function.Function;
 
 /**
- * Calculator expression state, manipulation, and evaluation.
- * Uses exp4j with custom degree-based trig functions.
+ * the actual calculator math. holds the expression, edits it, evaluates it.
+ * exp4j under the hood with our own degree based trig
  */
 final class CalcExpression {
 
@@ -80,7 +80,7 @@ final class CalcExpression {
     }
 
     static void appendToExpression(String token) {
-        // % is postfix percent: appends /100 rather than acting as a binary operator
+        // % just means /100 here, it's not modulo
         if (token.equals("%")) {
             if (showingResult) {
                 expression = formatResult(lastResult) + " /100";
@@ -96,7 +96,7 @@ final class CalcExpression {
         boolean isOperator = token.equals("+") || token.equals("-") || token.equals("*")
                 || token.equals("/") || token.equals("^");
 
-        // If appending a function and expression ends with a number, wrap it
+        // typing a function right after a number? wrap the number so sin(5) not 5sin(
         if (isFunction(token)) {
             if (showingResult) {
                 expression = token + formatResult(lastResult) + ")";
@@ -212,14 +212,14 @@ final class CalcExpression {
         while (i >= 0 && (Character.isDigit(expression.charAt(i)) || expression.charAt(i) == '.')) i--;
 
         if (end != i) {
-            // Trailing number found — toggle sign before it
+            // there's a number at the end, flip the sign in front of it
             if (i >= 0 && expression.charAt(i) == '-') {
                 expression = expression.substring(0, i) + expression.substring(i + 1);
             } else {
                 expression = expression.substring(0, i + 1) + "-" + expression.substring(i + 1);
             }
         } else {
-            // No trailing number (e.g. ends with ')') — wrap whole expression
+            // no number at the end (ends with ')' or whatever), wrap the whole thing
             String trimmed = expression.stripTrailing();
             if (trimmed.startsWith("-(") && trimmed.endsWith(")")) {
                 expression = trimmed.substring(2, trimmed.length() - 1);

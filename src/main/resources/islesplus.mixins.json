@@ -5,6 +5,8 @@
 	"mixins": [],
 	"client": [
 		"ChatHudMixin",
+		"ClickableWidgetAccessor",
+		"ScreenAccessor",
 		"ClientPlayNetworkHandlerMixin",
 		"ConfirmScreenMixin",
 		"DisplayEntityGlowMixin",
@@ -12,6 +14,7 @@
 		"HandledScreenAccessor",
 		"HandledScreenMixin",
 		"InGameHudScoreboardMixin",
+		"PlayerListHudAccessor",
 		"SoundSystemMixin",
 		"TextDisplayEntityRendererMixin",
 		"TitleScreenMixin"

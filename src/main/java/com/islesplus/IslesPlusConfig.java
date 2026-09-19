@@ -29,6 +29,7 @@ import com.islesplus.features.qtetracker.QteTracker;
 import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.slotlocker.SlotLocker;
 import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
+import com.islesplus.features.waystonefinder.WaystoneFinder;
 import com.islesplus.logging.IslesLog;
 import com.islesplus.sound.SoundController;
 import net.fabricmc.loader.api.FabricLoader;
@@ -43,7 +44,7 @@ public final class IslesPlusConfig {
         FabricLoader.getInstance().getConfigDir().resolve("islesplus");
     private static final Path CONFIG_PATH =
         CONFIG_DIR.resolve("islesplus.json");
-    /** Old flat location - migrate on first load if found. */
+    /** old location from before we had a folder, gets migrated on first load */
     private static final Path LEGACY_MAIN_PATH =
         FabricLoader.getInstance().getConfigDir().resolve("islesplus.json");
     private static final Path LEGACY_PATH =
@@ -71,25 +72,40 @@ public final class IslesPlusConfig {
         DropNotifier.dropNotifyEnabled = getBool(obj, "dropNotifyEnabled", true);
         DropNotifier.soundConfig = loadSoundConfig(obj, "dropNotify",
             DropNotifier.soundConfig);
-        NodeAlertManager.depletionPingEnabled = getBool(obj, "depletionPingEnabled", true);
+        NodeAlertManager.depletionPingEnabled = getBool(obj, "depletionPingEnabled", false);
         NodeAlertManager.depletionSoundConfig = loadSoundConfig(obj, "depletionPing",
             NodeAlertManager.depletionSoundConfig);
         NodeAlertManager.regenSoundConfig = loadSoundConfig(obj, "regenPing",
             NodeAlertManager.regenSoundConfig);
         NodeRadiusRenderer.nodeRadiusEnabled        = getBool(obj, "nodeRadiusEnabled",               false);
-        PlushieFinder.plushieFinderEnabled          = getBool(obj, "plushieFinderEnabled",            true);
+        PlushieFinder.plushieFinderEnabled          = getBool(obj, "plushieFinderEnabled",            false);
+        PlushieFinder.maxDistance                   = getInt(obj,  "plushieMaxDistance",              0);
         SlotLocker.slotLockEnabled                  = getBool(obj, "slotLockEnabled",                 true);
         ChestFinder.chestFinderEnabled              = getBool(obj,  "chestFinderEnabled",              false);
         ChestFinder.glowHue                         = getFloat(obj, "chestFinderGlowHue",             0.128f);
+        ChestFinder.glowSaturation                  = getFloat(obj, "chestFinderGlowSaturation",      1.0f);
+        ChestFinder.glowLightness                   = getFloat(obj, "chestFinderGlowLightness",       0.5f);
         MobFinder.mobFinderEnabled                  = getBool(obj,  "mobFinderEnabled",                false);
         MobFinder.glowHue                           = getFloat(obj, "mobFinderGlowHue",               0.617f);
-        PlayerFinder.playerFinderEnabled            = getBool(obj,  "playerFinderEnabled",             false);
+        MobFinder.glowSaturation                    = getFloat(obj, "mobFinderGlowSaturation",        1.0f);
+        MobFinder.glowLightness                     = getFloat(obj, "mobFinderGlowLightness",         0.5f);
+        PlayerFinder.playerFinderEnabled            = getBool(obj,  "playerFinderEnabled",             true);
         PlayerFinder.glowHue                        = getFloat(obj, "playerFinderGlowHue",            0.333f);
+        PlayerFinder.glowSaturation                 = getFloat(obj, "playerFinderGlowSaturation",     1.0f);
+        PlayerFinder.glowLightness                  = getFloat(obj, "playerFinderGlowLightness",      0.5f);
         SecretFinder.secretFinderEnabled            = getBool(obj,  "secretFinderEnabled",             false);
         SecretFinder.glowHue                        = getFloat(obj, "secretFinderGlowHue",            0.917f);
+        SecretFinder.glowSaturation                 = getFloat(obj, "secretFinderGlowSaturation",     1.0f);
+        SecretFinder.glowLightness                  = getFloat(obj, "secretFinderGlowLightness",      0.5f);
         VendingMachineFinder.vendingMachineFinderEnabled = getBool(obj, "vendingMachineFinderEnabled", false);
         VendingMachineFinder.glowHue                = getFloat(obj, "vendingMachineFinderGlowHue",    0.092f);
-        RankCalculator.rankCalculatorEnabled        = getBool(obj, "rankCalculatorEnabled",           false);
+        VendingMachineFinder.glowSaturation         = getFloat(obj, "vendingMachineFinderGlowSaturation", 1.0f);
+        VendingMachineFinder.glowLightness          = getFloat(obj, "vendingMachineFinderGlowLightness",  0.5f);
+        WaystoneFinder.waystoneFinderEnabled        = getBool(obj,  "waystoneFinderEnabled",          true);
+        WaystoneFinder.glowHue                      = getFloat(obj, "waystoneFinderGlowHue",          0.13f);
+        WaystoneFinder.glowSaturation               = getFloat(obj, "waystoneFinderGlowSaturation",   1.0f);
+        WaystoneFinder.glowLightness                = getFloat(obj, "waystoneFinderGlowLightness",    0.5f);
+        RankCalculator.rankCalculatorEnabled        = getBool(obj, "rankCalculatorEnabled",           true);
         RankCalculator.showPlayerCount              = getBool(obj, "rankShowPlayerCount",              false);
         RankCalculator.showRankDropTimer            = getBool(obj, "rankShowDropTimer",                false);
         HarvestTimer.harvestTimerEnabled            = getBool(obj, "harvestTimerEnabled",             false);
@@ -156,6 +172,7 @@ public final class IslesPlusConfig {
         ChatFilter.chatFilterEnabled                = getBool(obj,  "chatFilterEnabled",               false);
         ChatFilter.filterManaMeteor                = getBool(obj,  "filterManaMeteor",                false);
         ChatFilter.filterGuildChat                 = getBool(obj,  "filterGuildChat",                  false);
+        ChatFilter.filterDeaths                    = getBool(obj,  "filterDeaths",                     false);
         InventorySearch.inventorySearchEnabled      = getBool(obj,  "inventorySearchEnabled",           true);
         if (obj.has("searchBarPosition")) {
             try {
@@ -183,6 +200,22 @@ public final class IslesPlusConfig {
         rebuildModSoundsAllowlist();
     }
 
+    /** Writes to a sibling temp file and moves it into place, so a crash or kill mid-write can
+     * never leave a half-written config (which would lose party groups, watched items, ...). */
+    private static void writeAtomically(Path target, String content) throws IOException {
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Files.writeString(tmp, content);
+        try {
+            Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            // No atomic move here, or something (antivirus, a sync client) holds the file open in a
+            // way that refuses the swap: a plain write still gets the settings saved.
+            Files.writeString(target, content);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
+
     public static void save() {
         JsonObject obj = new JsonObject();
         obj.addProperty("chatUpdatesEnabled",               IslesClient.chatUpdatesEnabled);
@@ -197,17 +230,32 @@ public final class IslesPlusConfig {
         obj.addProperty("nodeRadiusEnabled",             NodeRadiusRenderer.nodeRadiusEnabled);
         obj.addProperty("regenPingMode",                 NodeAlertManager.regenPingMode.name());
         obj.addProperty("plushieFinderEnabled",          PlushieFinder.plushieFinderEnabled);
+        obj.addProperty("plushieMaxDistance",            PlushieFinder.maxDistance);
         obj.addProperty("slotLockEnabled",               SlotLocker.slotLockEnabled);
         obj.addProperty("chestFinderEnabled",            ChestFinder.chestFinderEnabled);
         obj.addProperty("chestFinderGlowHue",            ChestFinder.glowHue);
+        obj.addProperty("chestFinderGlowSaturation",     ChestFinder.glowSaturation);
+        obj.addProperty("chestFinderGlowLightness",      ChestFinder.glowLightness);
         obj.addProperty("mobFinderEnabled",              MobFinder.mobFinderEnabled);
         obj.addProperty("mobFinderGlowHue",              MobFinder.glowHue);
+        obj.addProperty("mobFinderGlowSaturation",       MobFinder.glowSaturation);
+        obj.addProperty("mobFinderGlowLightness",        MobFinder.glowLightness);
         obj.addProperty("playerFinderEnabled",           PlayerFinder.playerFinderEnabled);
         obj.addProperty("playerFinderGlowHue",           PlayerFinder.glowHue);
+        obj.addProperty("playerFinderGlowSaturation",    PlayerFinder.glowSaturation);
+        obj.addProperty("playerFinderGlowLightness",     PlayerFinder.glowLightness);
         obj.addProperty("secretFinderEnabled",           SecretFinder.secretFinderEnabled);
         obj.addProperty("secretFinderGlowHue",           SecretFinder.glowHue);
+        obj.addProperty("secretFinderGlowSaturation",    SecretFinder.glowSaturation);
+        obj.addProperty("secretFinderGlowLightness",     SecretFinder.glowLightness);
         obj.addProperty("vendingMachineFinderEnabled",   VendingMachineFinder.vendingMachineFinderEnabled);
         obj.addProperty("vendingMachineFinderGlowHue",   VendingMachineFinder.glowHue);
+        obj.addProperty("vendingMachineFinderGlowSaturation", VendingMachineFinder.glowSaturation);
+        obj.addProperty("vendingMachineFinderGlowLightness",  VendingMachineFinder.glowLightness);
+        obj.addProperty("waystoneFinderEnabled",         WaystoneFinder.waystoneFinderEnabled);
+        obj.addProperty("waystoneFinderGlowHue",         WaystoneFinder.glowHue);
+        obj.addProperty("waystoneFinderGlowSaturation",  WaystoneFinder.glowSaturation);
+        obj.addProperty("waystoneFinderGlowLightness",   WaystoneFinder.glowLightness);
         obj.addProperty("rankCalculatorEnabled",         RankCalculator.rankCalculatorEnabled);
         obj.addProperty("rankShowPlayerCount",           RankCalculator.showPlayerCount);
         obj.addProperty("rankShowDropTimer",             RankCalculator.showRankDropTimer);
@@ -258,13 +306,14 @@ public final class IslesPlusConfig {
         obj.addProperty("chatFilterEnabled",              ChatFilter.chatFilterEnabled);
         obj.addProperty("filterManaMeteor",              ChatFilter.filterManaMeteor);
         obj.addProperty("filterGuildChat",               ChatFilter.filterGuildChat);
+        obj.addProperty("filterDeaths",                  ChatFilter.filterDeaths);
         obj.addProperty("inventorySearchEnabled",        InventorySearch.inventorySearchEnabled);
         obj.addProperty("searchBarPosition",             InventorySearch.barPosition.name());
         obj.addProperty("maxMatches",                    maxMatches);
         obj.add("lockedSlots",                           SlotLocker.getLockedSlotsJson());
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
-            Files.writeString(CONFIG_PATH, GSON.toJson(obj));
+            writeAtomically(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
             IslesLog.runtimeWarn("[Isles+] Failed to save config", e);
         }
@@ -289,7 +338,7 @@ public final class IslesPlusConfig {
         IslesLog.runtimeWarn("[Isles+] Migrating config from " + LEGACY_MAIN_PATH + " to " + CONFIG_PATH);
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
-            Files.writeString(CONFIG_PATH, GSON.toJson(obj));
+            writeAtomically(CONFIG_PATH, GSON.toJson(obj));
             Files.deleteIfExists(LEGACY_MAIN_PATH); // only runs if write succeeded
         } catch (IOException e) {
             IslesLog.runtimeWarn("[Isles+] Failed to migrate config", e);
@@ -345,9 +394,8 @@ public final class IslesPlusConfig {
     }
 
     /**
-     * Rebuilds ModSounds' allowlist from the sounds that are actually configured
-     * on currently-enabled features. Only these exact sound IDs will pass through
-     * the Mod-only Sounds filter.
+     * rebuilds the ModSounds allowlist from whatever sounds are set on enabled features.
+     * only these exact sound ids get through the "mod only sounds" filter
      */
     private static void rebuildModSoundsAllowlist() {
         ArrayList<String> ids = new ArrayList<>();

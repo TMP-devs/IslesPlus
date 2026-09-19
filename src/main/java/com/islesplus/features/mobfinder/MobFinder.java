@@ -4,6 +4,7 @@ import com.islesplus.IslesPlusConfig;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
 import com.islesplus.features.voidcrystalfinder.VoidCrystalFinder;
+import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.minecraft.client.MinecraftClient;
@@ -25,10 +26,16 @@ public final class MobFinder {
 
     public static boolean mobFinderEnabled = false;
     public static float glowHue = 0.617f; // blue
+    public static float glowSaturation = 1.0f;
+    public static float glowLightness = 0.5f;
     private static final java.util.Map<String, Long> pairFirstSeenMs = new java.util.HashMap<>();
     private static volatile Set<Integer> glowingEntityIds = Set.of();
 
     private MobFinder() {
+    }
+
+    public static int glowRgb() {
+        return GlowColor.rgb(glowHue, glowSaturation, glowLightness);
     }
 
     public static void tick(MinecraftClient client, EntityScanResult scan) {
@@ -38,7 +45,7 @@ public final class MobFinder {
             return;
         }
 
-        // Collect exclusion zones around "Exit Rift" text displays
+        // ignore anything near an "Exit Rift" sign, that's not a mob
         List<double[]> exclusionPositions = new ArrayList<>();
         for (Entity entity : scan.textDisplaysFar) {
             if (entity instanceof DisplayEntity.TextDisplayEntity textDisplay) {

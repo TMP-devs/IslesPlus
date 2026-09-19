@@ -12,10 +12,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 public class SlotLocker {
-    public static boolean slotLockEnabled = false;
+    public static boolean slotLockEnabled = true;
     private static final Set<Integer> lockedSlots = new HashSet<>();
 
-    /** Called by IslesPlusConfig.load() to restore persisted locked slots. */
+    /** config load calls this to restore locked slots */
     public static void setLockedSlots(JsonArray arr) {
         lockedSlots.clear();
         for (JsonElement e : arr) {
@@ -25,7 +25,7 @@ public class SlotLocker {
         }
     }
 
-    /** Called by IslesPlusConfig.save() to serialize the current locked slots. */
+    /** config save calls this to write them out */
     public static JsonArray getLockedSlotsJson() {
         JsonArray arr = new JsonArray();
         lockedSlots.forEach(arr::add);
@@ -33,8 +33,8 @@ public class SlotLocker {
     }
 
     /**
-     * Returns true if this slot belongs to the player's inventory and is locked.
-     * Uses inventory reference identity so it works regardless of which screen is open.
+     * is this one of the player's own slots and locked?
+     * compares the inventory reference so it works in chests, crafting tables, whatever
      */
     public static boolean isLocked(Slot slot, PlayerInventory playerInventory) {
         if (!slotLockEnabled || WorldIdentification.world == PlayerWorld.OTHER) return false;
@@ -42,15 +42,15 @@ public class SlotLocker {
     }
 
     /**
-     * Returns true if the given hotbar index (0–8) is locked.
-     * Hotbar indices 0–8 in PlayerInventory match the output of GameOptions.getHotbarIndex().
+     * is this hotbar slot (0-8) locked?
+     * PlayerInventory hotbar indices line up with GameOptions.getHotbarIndex()
      */
     public static boolean isHotbarSlotLocked(int hotbarIndex) {
         if (!slotLockEnabled || WorldIdentification.world == PlayerWorld.OTHER) return false;
         return lockedSlots.contains(hotbarIndex);
     }
 
-    /** Toggles the lock on the given slot. No-op if the slot is not a player inventory slot. */
+    /** flip the lock on a slot. does nothing if it's not a player inventory slot */
     public static boolean toggleLock(Slot slot, PlayerInventory playerInventory) {
         if (!slotLockEnabled || WorldIdentification.world == PlayerWorld.OTHER) return false;
         if (slot.inventory != playerInventory) return false;
@@ -62,6 +62,6 @@ public class SlotLocker {
         return true;
     }
 
-    /** Called on disconnect. Locks are intentionally preserved across sessions. */
+    /** on disconnect. locks stay locked on purpose, they're saved to config */
     public static void reset() {}
 }

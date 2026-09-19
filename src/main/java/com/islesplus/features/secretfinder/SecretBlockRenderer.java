@@ -14,7 +14,6 @@ import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 
 public final class SecretBlockRenderer {
@@ -42,7 +41,7 @@ public final class SecretBlockRenderer {
         if (positions.isEmpty()) return;
         if (ctx.consumers() == null || ctx.matrices() == null) return;
 
-        int color = 0xFF000000 | MathHelper.hsvToRgb(SecretFinder.glowHue, 1.0f, 1.0f);
+        int color = 0xFF000000 | SecretFinder.glowRgb();
 
         Camera cam = MinecraftClient.getInstance().gameRenderer.getCamera();
         Vec3d camPos = cam.getCameraPos();

@@ -46,3 +46,19 @@
 *.ogg           binary
 *.wav           binary
 
+
+# ---------------------------------------------------------------------------
+# STAGING-ONLY paths. These are tracked here but must never reach the public
+# production repo (TMP-devs/IslesPlus). `git archive` - and therefore
+# scripts/export-release.sh, the supported way to cut a production snapshot -
+# leaves them out. Add new private paths here.
+# ---------------------------------------------------------------------------
+/docs                        export-ignore
+/docs/**                     export-ignore
+/CLAUDE.md                   export-ignore
+/scripts                     export-ignore
+/scripts/**                  export-ignore
+
+# Staging-only: the "found it" worker never reaches the production repo
+/workers export-ignore
+/workers/** export-ignore

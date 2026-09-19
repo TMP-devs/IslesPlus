@@ -93,7 +93,7 @@ public final class BossTracker {
         if (!bossTrackerEnabled || FeatureFlags.isKilled("boss_tracker")) return;
         if (WorldIdentification.world != PlayerWorld.ISLE) return;
 
-        // Reopen /ip menu after bossary auto-close (deferred to avoid screen conflicts)
+        // reopen /ip after the bossary auto closes (a tick later or the screens fight)
         if (pendingReopenMenu && !pendingAutoClose && client.currentScreen == null) {
             pendingReopenMenu = false;
             client.setScreen(new com.islesplus.screen.islesscreen.IslesScreen());
@@ -172,7 +172,7 @@ public final class BossTracker {
         }
     }
 
-    /** Called when a chat message is received. Pass the plain string. */
+    /** feed every chat message in here as a plain string */
     public static void onChatMessage(String msg) {
         if (!bossTrackerEnabled || FeatureFlags.isKilled("boss_tracker")) return;
 
@@ -190,7 +190,7 @@ public final class BossTracker {
             return;
         }
 
-        // Pending spawn event — next decorated message with ☠ is the spawning boss
+        // spawn pending, next decorated msg with ☠ is the boss that's spawning
         if (pendingSpawnEvent) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
@@ -214,7 +214,7 @@ public final class BossTracker {
             return;
         }
 
-        // Pending defeat — next decorated message with ☠ is the defeated boss
+        // defeat pending, next decorated msg with ☠ is the boss that died
         if (pendingDefeatBoss != null && pendingDefeatBoss.equals("__pending__")) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
@@ -231,7 +231,7 @@ public final class BossTracker {
             return;
         }
 
-        // "about to spawn in 120 seconds" — extract name from same message
+        // "about to spawn in 120 seconds", name is in the same message
         if (stripped.contains("about to spawn in 120 seconds")) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
@@ -241,7 +241,7 @@ public final class BossTracker {
         }
     }
 
-    /** Extract boss name from a message containing ☠ BossName ☠ */
+    /** pulls the name out of "☠ BossName ☠" */
     private static String extractBossNameFromDecorated(String msg) {
         Matcher m = SKULL_PATTERN.matcher(msg);
         while (m.find()) {
@@ -277,7 +277,7 @@ public final class BossTracker {
         return null;
     }
 
-    /** Called when the /bossary inventory screen is detected. Parse all items. */
+    /** bossary screen showed up, go through all the items */
     public static void parseBossaryItems(List<ItemStack> items) {
         List<TrackedBoss> parsed = new ArrayList<>();
         for (ItemStack stack : items) {
@@ -294,6 +294,8 @@ public final class BossTracker {
                 if (l.contains("POSSIBLE DROPS:")) hasPossibleDrops = true;
                 if (l.contains("Next spawn in:")) {
                     remainingMs = parseTimeString(l);
+                } else if (l.contains("Available now")) {
+                    remainingMs = 0;
                 }
             }
             if (!hasPossibleDrops) continue;
@@ -308,7 +310,7 @@ public final class BossTracker {
             }
             TrackedBoss existing = findBoss(name);
             if (existing != null && state == BossState.UNKNOWN) {
-                // "Available now!" — keep whatever richer state we already have from entity/chat
+                // "Available now!", don't clobber better state we already got from entity/chat
                 parsed.add(existing);
             } else if (existing != null && (existing.state == BossState.SPAWNING || existing.state == BossState.SPAWNED || existing.state == BossState.READY)) {
                 parsed.add(existing);
@@ -326,7 +328,7 @@ public final class BossTracker {
         }
     }
 
-    /** Parse "» Next spawn in: 1h 58m 10s" → milliseconds */
+    /** "» Next spawn in: 1h 58m 10s" -> ms */
     private static long parseTimeString(String line) {
         long ms = 0;
         Matcher h = HOURS_PATTERN.matcher(line);
@@ -338,7 +340,7 @@ public final class BossTracker {
         return ms;
     }
 
-    /** Per-boss stale check: fresh only if entity scan is actively seeing the beacon. */
+    /** is this boss's data fresh? only if the entity scan can currently see its beacon */
     public static boolean isStale(TrackedBoss boss) {
         long now = Util.getMeasuringTimeMs();
         if (boss.lastEntityMs > 0 && now - boss.lastEntityMs < 3_000L) return false;
@@ -368,7 +370,7 @@ public final class BossTracker {
             String timeLine = lines[2].strip();
             TrackedBoss boss = findBoss(bossName);
             if (boss == null) continue;
-            // SPAWNING and READY are chat-driven — entity scan must not override them
+            // SPAWNING and READY come from chat, entity scan shouldn't stomp on them
             if (boss.state == BossState.SPAWNING || boss.state == BossState.READY) continue;
             boss.lastEntityMs = now;
             if (timeLine.toLowerCase().contains("available")) {
@@ -384,14 +386,13 @@ public final class BossTracker {
         }
     }
 
-    /** Format milliseconds as "1h 23m" or "45s" */
+    /** ms -> "1h 23m" or "45s" */
+    /** Clock style: 10:10, or 1:05:09 once there are hours. */
     public static String formatTime(long ms) {
-        if (ms <= 0) return "0s";
-        long s = ms / 1000;
+        long s = Math.max(0, ms / 1000);
         long h = s / 3600; s %= 3600;
         long m = s / 60;   s %= 60;
-        if (h > 0) return h + "h " + m + "m";
-        if (m > 0) return m + "m " + s + "s";
-        return s + "s";
+        if (h > 0) return String.format("%d:%02d:%02d", h, m, s);
+        return String.format("%d:%02d", m, s);
     }
 }

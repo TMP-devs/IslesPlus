@@ -1,6 +1,7 @@
 package com.islesplus.features.vendingmachinefinder;
 
 import com.islesplus.entity.EntityScanResult;
+import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import net.minecraft.client.MinecraftClient;
@@ -18,6 +19,8 @@ import java.util.Set;
 public final class VendingMachineFinder {
     public static boolean vendingMachineFinderEnabled = false;
     public static float glowHue = 0.092f; // orange
+    public static float glowSaturation = 1.0f;
+    public static float glowLightness = 0.5f;
     private static final Map<Integer, Boolean> modelCache = new HashMap<>();
     private static final Map<Integer, Boolean> activeCache = new HashMap<>();
     private static volatile Set<Integer> identifiedMachineIds = Set.of();
@@ -25,8 +28,12 @@ public final class VendingMachineFinder {
 
     private VendingMachineFinder() {}
 
+    public static int glowRgb() {
+        return GlowColor.rgb(glowHue, glowSaturation, glowLightness);
+    }
+
     public static void tick(MinecraftClient client, EntityScanResult scan) {
-        // Always detect when in rift so other finders can filter out vending machines
+        // always scan in rifts even if the feature's off, other finders need this to skip vending machines
         if (WorldIdentification.world != PlayerWorld.RIFT
                 || client.player == null || client.world == null) {
             identifiedMachineIds = Set.of();
@@ -75,7 +82,7 @@ public final class VendingMachineFinder {
         glowingEntityIds = Set.copyOf(nextGlowEntityIds);
     }
 
-    /** Matches any vending machine model (active or inactive). Used for identification/filtering. */
+    /** any vending machine, active or not. used to identify them for filtering */
     private static boolean isAnyVendingMachineModel(Entity entity) {
         if (!(entity instanceof DisplayEntity.ItemDisplayEntity itemDisplay)) return false;
         try {
@@ -88,7 +95,7 @@ public final class VendingMachineFinder {
         }
     }
 
-    /** Matches only active vending machine models. Used for glow eligibility. */
+    /** only the active ones, those are the ones that get the glow */
     private static boolean isActiveVendingMachineModel(Entity entity) {
         if (!(entity instanceof DisplayEntity.ItemDisplayEntity itemDisplay)) return false;
         try {
@@ -109,7 +116,7 @@ public final class VendingMachineFinder {
         glowingEntityIds = Set.of();
     }
 
-    /** Returns true if the entity's model matches a vending machine. */
+    /** is this thing a vending machine */
     public static boolean isVendingMachineEntity(Entity entity) {
         return entity != null && identifiedMachineIds.contains(entity.getId());
     }

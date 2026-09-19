@@ -120,8 +120,8 @@ public final class RiftRepository {
             if (!root.isJsonObject()) return null;
             JsonObject rootObj = root.getAsJsonObject();
 
-            // "duration_seconds" now stores the score multiplier for each rift,
-            // not a static duration. totalTimeSecs = totalPoints * multiplier.
+            // "duration_seconds" is a misnomer now, it's actually the score multiplier per rift.
+            // totalTimeSecs = totalPoints * multiplier. didn't rename the json key to not break old caches
             Map<String, Double> multipliers = new LinkedHashMap<>();
             JsonElement riftsElement = rootObj.get("rifts");
             if (riftsElement != null && riftsElement.isJsonArray()) {

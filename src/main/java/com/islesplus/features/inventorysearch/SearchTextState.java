@@ -9,7 +9,8 @@ import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
 
 /**
- * Search bar text state, cursor management, keyboard handling, and item matching.
+ * the text box part of the search bar: what's typed, where the cursor is, key handling,
+ * and whether an item matches
  */
 final class SearchTextState {
 
@@ -18,7 +19,7 @@ final class SearchTextState {
     static int cursorPos = 0;
     static int selectionStart = -1; // -1 = no selection
 
-    /** Parsed from searchText whenever it changes. */
+    /** re-parsed from searchText every time it changes */
     static String[] parsedTerms = new String[0];
 
     private SearchTextState() {}
