@@ -3,6 +3,8 @@ Isles+ is a quality-of-life mod for Skyblock Isles built to make routine gamepla
 
 [Trailer](https://youtu.be/L9dtyvOELig)
 
+[Verify that you have an official mod version](https://sha256-islesplus.chrrisk.workers.dev/)
+
 **Server IP:** `skyblockisles.net` *(not affiliated)*
 
 **Mod created by:** `chrrisk & Scrolls`
