@@ -52,13 +52,13 @@ public class BigToggle extends Widget {
         int textH = Fonts.height(Fonts.SMALL);
         int textY = y + (h - textH) / 2;
         int textCx = on ? x + half / 2 : x + w - half / 2;
-        Fonts.drawCentered(ctx, on ? "ON" : "OFF", textCx, textY, on ? Theme.CREAM : 0xFFF4EFE6, Fonts.SMALL);
+        Fonts.drawCentered(ctx, on ? "ON" : "OFF", textCx, textY, on ? Theme.CREAM : Theme.OFF_TEXT, Fonts.SMALL);
 
         int knobFill = on ? Theme.CREAM : Theme.KNOB_OFF;
         Draw.ring(ctx, knobX, knobY, knobW, knobH, Theme.INK);
         ctx.fill(knobX, knobY, knobX + knobW, knobY + knobH, knobFill);
-        ctx.fill(knobX, knobY, knobX + knobW, knobY + 1, 0x59FFFFFF);
-        ctx.fill(knobX, knobY + knobH - 1, knobX + knobW, knobY + knobH, 0x59000000);
+        ctx.fill(knobX, knobY, knobX + knobW, knobY + 1, Theme.EDGE_LIGHT);
+        ctx.fill(knobX, knobY + knobH - 1, knobX + knobW, knobY + knobH, Theme.EDGE_DARK);
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {

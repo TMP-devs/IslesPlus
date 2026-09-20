@@ -62,7 +62,7 @@ public class BrightnessRail extends DragTrack {
         knobX = Math.max(x, Math.min(x + w - KNOB_W, knobX));
         int knobY = y - PAD;
         int knobH = h + 2 * PAD;
-        Draw.bevel(ctx, knobX, knobY, KNOB_W, knobH, Theme.CREAM, 0xFFFFFFFF, 0xFFC9B58A, Theme.INK_DEEP);
+        Draw.bevel(ctx, knobX, knobY, KNOB_W, knobH, Theme.CREAM, Theme.KNOB_LIT, Theme.KNOB_SHADE, Theme.INK_DEEP);
     }
 
     @Override void applyValue(double mx) {

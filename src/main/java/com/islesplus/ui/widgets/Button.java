@@ -13,7 +13,6 @@ import java.util.function.Supplier;
 /** Bevelled push button in one of four kinds; centred label, optional leading "+ " glyph,
  * optional fixed-fill width, and a static or dynamic (re-measured each layout) label. */
 public class Button extends Widget {
-    private static final int QUIET_HOVER = 0xFFE2D3AA;
 
     public enum Kind { PRIMARY, SECONDARY, QUIET, ICON }
 
@@ -72,7 +71,7 @@ public class Button extends Widget {
                 litC = Theme.SECONDARY_LIT; shadeC = Theme.SECONDARY_SHADE; ringC = Theme.SURFACE_RING; textC = Theme.TEXT_LABEL;
             }
             case QUIET -> {
-                fillC = hover ? QUIET_HOVER : Theme.RAISED;
+                fillC = hover ? Theme.RAISED_HOVER : Theme.RAISED;
                 litC = Theme.RAISED_LIT; shadeC = Theme.RAISED_SHADE; ringC = Theme.RAISED_RING; textC = Theme.TEXT_LABEL;
             }
             case ICON -> {
@@ -84,6 +83,9 @@ public class Button extends Widget {
             }
             default -> throw new IllegalStateException("Unknown Kind: " + kind);
         }
+        // A release can go elsewhere (the click opened a dialog or another screen): only look
+        // pressed while the mouse button really is down.
+        if (pressed && !Draw.leftMouseDown()) pressed = false;
         if (pressed) litC = shadeC;
 
         Draw.bevel(ctx, x, y, w, h, fillC, litC, shadeC, ringC);

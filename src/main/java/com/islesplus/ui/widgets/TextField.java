@@ -63,24 +63,27 @@ public class TextField extends Widget {
     /** The field that currently has keyboard focus, if any (at most one does at a time). */
     private static TextField focusedField;
 
+    /** What the field held when it took focus: a blur that changed nothing has nothing to persist. */
+    private String textAtFocus = "";
+
     /** Whether the player is typing into some text field right now. */
     public static boolean anyFocused() { return focusedField != null && focusedField.focused; }
 
     public void focus() {
-        if (!focused) onFocusGained();
+        if (!focused) { onFocusGained(); textAtFocus = text(); }
         focused = true;
         allSelected = false;
         focusedField = this;
     }
 
-    /** Idempotent. {@code onBlur} runs once, on the focused -> unfocused transition: the place to
+    /** Idempotent. {@code onBlur} runs once, on the focused -> unfocused transition and only if the text changed: the place to
      * persist what was typed (never save per keystroke - that is a disk write per character). */
     @Override public void unfocus() {
         boolean wasFocused = this.focused;
         this.focused = false;
         if (focusedField == this) focusedField = null;
         this.allSelected = false;
-        if (wasFocused && onBlur != null) onBlur.run();
+        if (wasFocused && onBlur != null && !text().equals(textAtFocus)) onBlur.run();
     }
 
     /** Current text, reading through {@code get} each call; never null. */

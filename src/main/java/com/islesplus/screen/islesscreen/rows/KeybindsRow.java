@@ -29,6 +29,7 @@ public final class KeybindsRow {
             .add(strip("Open Backpack (/bp)", IslesClient.BACKPACK_KEY))
             .add(strip("Open Trash (/trash)", IslesClient.TRASH_KEY))
             .add(strip("Open Resource Vault", IslesClient.RESOURCE_VAULT_KEY))
+            .add(strip("Cosmetics Hall (/cosmeticshall)", IslesClient.COSMETICS_HALL_KEY))
             .add(strip("Auto Party", IslesClient.AUTO_PARTY_KEY))
             .add(strip("Party Warp (/p warp)", IslesClient.PARTY_WARP_KEY))
             .add(superJumpStrip())

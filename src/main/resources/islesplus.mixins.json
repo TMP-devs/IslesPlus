@@ -6,7 +6,6 @@
 	"client": [
 		"ChatHudMixin",
 		"ClickableWidgetAccessor",
-		"ScreenAccessor",
 		"ClientPlayNetworkHandlerMixin",
 		"ConfirmScreenMixin",
 		"DisplayEntityGlowMixin",
@@ -14,6 +13,7 @@
 		"HandledScreenAccessor",
 		"HandledScreenMixin",
 		"InGameHudScoreboardMixin",
+		"KeyBindingMixin",
 		"PlayerListHudAccessor",
 		"SoundSystemMixin",
 		"TextDisplayEntityRendererMixin",

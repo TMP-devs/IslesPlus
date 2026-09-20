@@ -137,6 +137,12 @@ public class IslesClient implements ClientModInitializer {
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
+    public static final KeyBinding COSMETICS_HALL_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        "key.islesplus.cosmetics_hall",
+        InputUtil.Type.KEYSYM,
+        GLFW.GLFW_KEY_UNKNOWN,
+        KEYBIND_CATEGORY_ISLESPLUS
+    ));
     public static final KeyBinding SUPER_JUMP_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.super_jump",
         InputUtil.Type.KEYSYM,
@@ -232,6 +238,7 @@ public class IslesClient implements ClientModInitializer {
         });
 
         PlushieMenuHook.register();
+        com.islesplus.screen.TitleMenuRestyle.register();
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             String text = message.getString();
@@ -319,12 +326,11 @@ public class IslesClient implements ClientModInitializer {
         while (CONFIRM_INVENTORY_FULL_KEY.wasPressed()) { InventoryNotifier.confirm(); }
         while (BACKPACK_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("bp"); }
         while (TRASH_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("trash"); }
+        while (COSMETICS_HALL_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("cosmeticshall"); }
         while (RESOURCE_VAULT_KEY.wasPressed()) { ResourceVaultOpener.activate(); }
         while (AUTO_PARTY_KEY.wasPressed()) { if (AutoParty.enabled) AutoParty.trigger(client); }
         while (PARTY_WARP_KEY.wasPressed()) { if (AutoParty.enabled && client.player != null) client.player.networkHandler.sendChatCommand("p warp"); }
-        boolean superJumpTapped = false;   // a press AND release inside one tick never shows as held
-        while (SUPER_JUMP_KEY.wasPressed()) superJumpTapped = true;
-        SuperJump.onKeyState(client, SUPER_JUMP_KEY.isPressed(), superJumpTapped);
+        while (SUPER_JUMP_KEY.wasPressed()) { }   // drained: super jump acts on the raw key event (KeyBindingMixin)
         SuperJump.tick(client);
         EntityScanResult scan;
         try {

@@ -5,6 +5,13 @@ import net.minecraft.client.gui.DrawContext;
 public final class Draw {
     private Draw() {}
 
+    /** Whether the left mouse button is physically down right now. For widgets that draw a pressed
+     * state: the release event can go elsewhere (a click that opens a dialog or another screen). */
+    public static boolean leftMouseDown() {
+        long window = net.minecraft.client.MinecraftClient.getInstance().getWindow().getHandle();
+        return org.lwjgl.glfw.GLFW.glfwGetMouseButton(window, org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT) == org.lwjgl.glfw.GLFW.GLFW_PRESS;
+    }
+
     /** Fill + 1px top lit + 1px bottom shade inside, 1px ring outside the rect. */
     public static void bevel(DrawContext c, int x, int y, int w, int h, int fill, int lit, int shade, int ring) {
         c.fill(x - 1, y - 1, x + w + 1, y + h + 1, ring);

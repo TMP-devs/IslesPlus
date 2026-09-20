@@ -25,7 +25,6 @@ import java.util.function.IntSupplier;
 public class Dropdown extends Widget {
     public enum Style { DARK, LIGHT }
 
-    private static final int LIGHT_HOVER = 0xFFE2D3AA;
     private static final int CARET_INSET = 6;
 
     private final OverlayHost host;
@@ -66,7 +65,7 @@ public class Dropdown extends Widget {
             caretC = Theme.WELL_TEXT_DIM;
         } else {
             // LIGHT: transparent on its parent; no background/ring when closed, hover fill only.
-            if (hover) ctx.fill(x, y, x + w, y + h, LIGHT_HOVER);
+            if (hover) ctx.fill(x, y, x + w, y + h, Theme.RAISED_HOVER);
             textC = Theme.INK_DEEP;
             caretC = Theme.SURFACE_RING;
         }
@@ -140,10 +139,15 @@ public class Dropdown extends Widget {
             this.w = Dropdown.this.w;
             this.x = Dropdown.this.x;
             int screenH = host.screenHeight();
-            if (Dropdown.this.y + Metrics.DROPDOWN_H + listH > screenH) {
-                this.y = Dropdown.this.y - listH;
-            } else {
-                this.y = Dropdown.this.y + Metrics.DROPDOWN_H;
+            int below = Dropdown.this.y + Metrics.DROPDOWN_H, above = Dropdown.this.y - listH;
+            boolean fitsBelow = below + listH <= screenH, fitsAbove = above >= 0;
+            if (fitsBelow) this.y = below;
+            else if (fitsAbove) this.y = above;
+            else {
+                // Fits on neither side (a short window): take the roomier side and slide the list
+                // back on screen, so every row stays reachable even if it then covers the button.
+                int preferred = screenH - below >= Dropdown.this.y ? below : above;
+                this.y = Math.max(0, Math.min(preferred, screenH - listH));
             }
             this.h = listH;
             return this.h;
@@ -175,9 +179,9 @@ public class Dropdown extends Widget {
                 boolean isSelected = idx == sel;
                 int bg, textC, dotC, metaC;
                 if (isSelected) {
-                    bg = Theme.OXBLOOD; textC = Theme.CREAM; dotC = Theme.CREAM; metaC = 0xFFE8CFC6;
+                    bg = Theme.OXBLOOD; textC = Theme.CREAM; dotC = Theme.CREAM; metaC = Theme.OXBLOOD_META;
                 } else if (style == Style.DARK) {
-                    bg = Theme.WELL; textC = Theme.WELL_ROW_TEXT; dotC = Theme.OFF_TRACK; metaC = 0xFFA89C88;
+                    bg = Theme.WELL; textC = Theme.WELL_ROW_TEXT; dotC = Theme.OFF_TRACK; metaC = Theme.WELL_META;
                 } else {
                     bg = Theme.RAISED; textC = Theme.INK_DEEP; dotC = Theme.SECONDARY; metaC = Theme.TEXT_FOOT;
                 }

@@ -19,6 +19,9 @@ import java.util.Collection;
 
 @Mixin(InGameHud.class)
 public class InGameHudScoreboardMixin {
+    /** Vanilla draws each sidebar row, and the title row, 9 px tall. */
+    private static final int VANILLA_ROW_H = 9;
+
 
     @Inject(method = "renderScoreboardSidebar", at = @At("RETURN"))
     private void captureScoreboardBounds(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
@@ -42,7 +45,6 @@ public class InGameHudScoreboardMixin {
         }
 
         TextRenderer tr = client.textRenderer;
-        int lineHeight = tr.fontHeight + 1;
 
         // Filter hidden, cap at 15 (same as vanilla)
         long count = entries.stream().filter(e -> !e.hidden()).limit(15).count();
@@ -60,14 +62,17 @@ public class InGameHudScoreboardMixin {
             maxWidth = Math.max(maxWidth, nameW + 8 + scoreW);
         }
 
-        // Vanilla renders: x = screenWidth - maxWidth - 3
-        // y is centered: y = screenHeight/2 - (count * lineHeight)/2 - lineHeight (header above)
+        // Vanilla renders: x = screenWidth - maxWidth - 3. It is NOT vertically centred: rows are
+        // 9 px, the BOTTOM of the list sits at screenHeight/2 + listHeight/3, and the title row
+        // (9 px + 1 px gap) is drawn above the list.
         int sw = context.getScaledWindowWidth();
         int sh = context.getScaledWindowHeight();
 
-        int totalHeight = (int)(count + 1) * lineHeight + 2; // entries + header + padding
+        int listHeight = (int) count * VANILLA_ROW_H;
+        int bottom = sh / 2 + listHeight / 3;
         int sbX = sw - maxWidth - 3;
-        int sbY = sh / 2 - totalHeight / 2;
+        int sbY = bottom - listHeight - VANILLA_ROW_H - 1;   // top of the title row
+        int totalHeight = bottom - sbY;
 
         ScoreboardTracker.setBounds(sbX, sbY, maxWidth + 3, totalHeight);
     }

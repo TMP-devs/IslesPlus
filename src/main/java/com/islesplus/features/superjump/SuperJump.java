@@ -1,48 +1,77 @@
 package com.islesplus.features.superjump;
 
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import com.islesplus.IslesClient;
 import com.islesplus.sync.FeatureFlags;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 
 /**
- * One key for the server's super jump, which is normally two keys at once: swap-to-off-hand and
- * jump. Pressing the Isles+ key presses both of those key bindings together, exactly as if the
- * player had hit them at the same moment - one press each, once per physical press of our key (holding it does not repeat). It is
- * unbound by default, so it does nothing until the player gives it a key.
+ * One key for the server's super jump, which is normally two keys hit together: jump and
+ * swap-to-off-hand. It works the way the "Multi Key Bindings" mod does, as if the Isles+ key were
+ * bound to BOTH of those actions: the instant the physical key goes down (the raw key event, not
+ * the next game tick) both bindings count as pressed, swap-hands gets its one click, and both stay
+ * held for exactly as long as the key is held. Letting go releases both.
+ * <p>Nothing is timed or sequenced: pressing jump even one tick before the off-hand key ruins it
+ * (the dash then fires from mid-air), and a fixed hold time is not what a key does.
+ * <p>Keyboard auto-repeat is ignored. Unbound by default, so it does nothing until the player gives
+ * it a key; it also does nothing unless both vanilla keys are bound.
  */
 public final class SuperJump {
-    private static final int JUMP_HOLD_TICKS = 2;
-    private static int jumpTicksLeft = 0;
+    /** Whether our key is physically down and currently holding the two vanilla bindings. */
+    private static boolean holding = false;
+    /** A game tick has run with the bindings held. A tap can start AND end between two ticks; the
+     * release then waits for that tick, or the jump would never be seen at all. */
+    private static boolean tickSeen = false;
+    private static boolean releasePending = false;
 
     private SuperJump() {}
 
-    private static boolean keyWasDown = false;
+    /** From {@code KeyBindingMixin}: every raw press / release of any key or mouse button. */
+    public static void onRawKey(InputUtil.Key key, boolean pressed) {
+        if (IslesClient.SUPER_JUMP_KEY.isUnbound()) return;
+        if (!key.equals(KeyBindingHelper.getBoundKeyOf(IslesClient.SUPER_JUMP_KEY))) return;
+        MinecraftClient client = MinecraftClient.getInstance();
 
-    /** Call every tick with whether the super jump key is physically down, and whether Minecraft
-     * counted a press since the last tick. Fires once per physical press: holding the key (the OS
-     * repeats it, and each repeat counts as a "press" to Minecraft) must not swap and jump over
-     * and over, while a tap that is already released by the time the tick samples it still counts. */
-    public static void onKeyState(MinecraftClient client, boolean down, boolean tapped) {
-        boolean pressedNow = (down || tapped) && !keyWasDown;
-        keyWasDown = down;
-        if (pressedNow) trigger(client);
-    }
-
-    private static void trigger(MinecraftClient client) {
+        if (!pressed) {
+            if (holding && !tickSeen) releasePending = true;
+            else release(client);
+            return;
+        }
+        if (holding) return;   // keyboard auto-repeat: the key never came up in between
         if (FeatureFlags.isKilled("super_jump")) return;
         if (client.player == null || client.currentScreen != null) return;
         if (unboundWarning() != null) return;   // needs BOTH keys: never press just one of them
 
-        // Off hand: register one press of whatever key "Swap Item With Offhand" is bound to.
-        // Vanilla then handles it like a real press, this same tick.
-        InputUtil.Key swapKey = KeyBindingHelper.getBoundKeyOf(client.options.swapHandsKey);
-        KeyBinding.onKeyPressed(swapKey);
-
-        // Jump: hold the jump binding down for a couple of ticks, then let go (see tick()).
+        holding = true;
+        tickSeen = false;
+        releasePending = false;
+        // Off hand: held, plus the one click vanilla acts on (it swaps per click, not per held tick).
+        client.options.swapHandsKey.setPressed(true);
+        KeyBinding.onKeyPressed(KeyBindingHelper.getBoundKeyOf(client.options.swapHandsKey));
+        // Jump: held, which is all vanilla reads for jumping.
         client.options.jumpKey.setPressed(true);
-        jumpTicksLeft = JUMP_HOLD_TICKS;
+    }
+
+    /** Lets go of both and hands them back to whatever the player is really holding. */
+    private static void release(MinecraftClient client) {
+        if (!holding) return;
+        holding = false;
+        releasePending = false;
+        if (client == null || client.options == null) return;
+        client.options.jumpKey.setPressed(false);
+        client.options.swapHandsKey.setPressed(false);
+        // Under a screen nothing is re-read: that would press held keys "through" the screen.
+        if (client.currentScreen == null) KeyBinding.updatePressedStates();
+    }
+
+    /** Safety net, once a tick: a release event can be lost (the window lost focus, a screen
+     * opened), and without this the key would look held forever and never fire again. */
+    public static void tick(MinecraftClient client) {
+        if (!holding) return;
+        tickSeen = true;
+        if (releasePending || !IslesClient.SUPER_JUMP_KEY.isPressed()) release(client);
     }
 
     /** Which of the two vanilla keys is unbound, as a sentence for the Keybinds card; null when
@@ -57,24 +86,8 @@ public final class SuperJump {
         return which + " unbound in Controls, so Super Jump will not run.";
     }
 
-    /** Lets go of the jump key again, handing it back to whatever the player is really holding. */
-    public static void tick(MinecraftClient client) {
-        if (jumpTicksLeft <= 0) return;
-        if (--jumpTicksLeft == 0) releaseJump(client);
-    }
-
-    /** Lets go of jump. With no screen open the key is handed back to whatever the player is
-     * really holding; under a screen it is simply released (re-reading the keyboard there would
-     * press held keys "through" the screen). */
-    private static void releaseJump(MinecraftClient client) {
-        client.options.jumpKey.setPressed(false);
-        if (client.currentScreen == null) KeyBinding.updatePressedStates();
-    }
-
     public static void reset() {
-        MinecraftClient client = MinecraftClient.getInstance();
-        if (jumpTicksLeft > 0 && client != null && client.options != null) releaseJump(client);
-        jumpTicksLeft = 0;
-        keyWasDown = false;
+        release(MinecraftClient.getInstance());
+        holding = false;
     }
 }

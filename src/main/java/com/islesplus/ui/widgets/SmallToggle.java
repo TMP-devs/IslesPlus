@@ -69,8 +69,8 @@ public class SmallToggle extends Widget {
         int knobFill = on ? Theme.CREAM : Theme.KNOB_OFF;
         Draw.ring(ctx, knobX, knobY, knobW, knobH, Theme.INK);
         ctx.fill(knobX, knobY, knobX + knobW, knobY + knobH, knobFill);
-        ctx.fill(knobX, knobY, knobX + knobW, knobY + 1, 0x59FFFFFF);
-        ctx.fill(knobX, knobY + knobH - 1, knobX + knobW, knobY + knobH, 0x59000000);
+        ctx.fill(knobX, knobY, knobX + knobW, knobY + 1, Theme.EDGE_LIGHT);
+        ctx.fill(knobX, knobY + knobH - 1, knobX + knobW, knobY + knobH, Theme.EDGE_DARK);
 
         int curX = x + tw;
         if (hasLabel()) {

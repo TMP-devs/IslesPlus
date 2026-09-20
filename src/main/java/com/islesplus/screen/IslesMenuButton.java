@@ -1,5 +1,6 @@
 package com.islesplus.screen;
 
+import com.islesplus.ui.Draw;
 import com.islesplus.ui.Fonts;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.Click;
@@ -58,6 +59,9 @@ public class IslesMenuButton extends ClickableWidget {
 
     @Override
     protected void renderWidget(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        // The release can be swallowed (the click opened another screen, or the mouse went up
+        // outside the window): never stay drawn pressed once the button itself is up.
+        if (pressed && !Draw.leftMouseDown()) pressed = false;
         boolean lit = active && (isHovered() || isFocused());
         boolean down = pressed && isHovered();
         int x = getX() + 1, w = getWidth() - 2;                       // ring stays inside the slot

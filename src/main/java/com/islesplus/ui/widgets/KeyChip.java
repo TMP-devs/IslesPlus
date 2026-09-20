@@ -50,7 +50,7 @@ public class KeyChip extends Widget {
     @Override public int layout(int x, int y, int width) {
         this.x = x;
         this.y = y;
-        this.w = prefWidth();
+        this.w = Math.min(prefWidth(), Math.max(0, width));   // a narrow card ellipsizes the label instead
         this.h = 14;
         return this.h;
     }
