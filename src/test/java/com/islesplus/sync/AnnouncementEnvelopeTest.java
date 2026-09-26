@@ -113,8 +113,9 @@ class AnnouncementEnvelopeTest {
     /** Signed by the same bytes the Worker produces (announce-worker/test/announcement.test.ts checks
      * the Worker signs this payload to exactly this signature). */
     @Test void acceptsTheWorkersCrossLanguageFixture() throws Exception {
-        JsonObject f = JsonParser.parseString(Files.readString(
-            Path.of("announce-worker/test/fixtures/cross-language.json"), StandardCharsets.UTF_8)).getAsJsonObject();
+        Path fixture = Path.of("announce-worker/test/fixtures/cross-language.json");
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.exists(fixture), "no announce-worker in this checkout");
+        JsonObject f = JsonParser.parseString(Files.readString(fixture, StandardCharsets.UTF_8)).getAsJsonObject();
         PublicKey key = KeyFactory.getInstance("RSA").generatePublic(
             new X509EncodedKeySpec(Base64.getDecoder().decode(f.get("publicKeyB64").getAsString())));
         AnnouncementEnvelope.Opened o = AnnouncementEnvelope.open(

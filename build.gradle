@@ -42,8 +42,9 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 	testLogging { events 'failed', 'skipped' }
-	// AnnouncementEnvelopeTest reads the Worker's signing fixture; a change to it must re-run the tests
-	inputs.file('announce-worker/test/fixtures/cross-language.json')
+	// AnnouncementEnvelopeTest reads the Worker's signing fixture when it is there (not in release exports)
+	def fixture = file('announce-worker/test/fixtures/cross-language.json')
+	if (fixture.exists()) inputs.file(fixture)
 }
 
 processResources {
