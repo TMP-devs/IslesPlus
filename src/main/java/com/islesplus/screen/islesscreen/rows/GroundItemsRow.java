@@ -27,7 +27,7 @@ import java.util.List;
 
 /**
  * Ground Items Notifier row: a toggle plus a drawer holding a dynamic list of per-{@link
- * WatchedItem} sub-cards and an "ADD ITEM" button.
+ * WatchedItem} sub-cards and an "Add item" button.
  *
  * <p>The list is rebuilt from scratch (in {@link ListBody#layout}) whenever the model's {@code
  * watchedItems} list has structurally changed since the last build: different size, or any
@@ -50,16 +50,16 @@ public final class GroundItemsRow {
     }
 
     /** Status text shown on an item's sub-card: {@code "WATCHING · n ALERT(S)"} while enabled
-     * (n = how many of its four alert flags are on), otherwise {@code "PAUSED"}. Package-visible
+     * (n = how many of its four alert flags are on), otherwise {@code "Paused"}. Package-visible
      * so {@code GroundItemsRowTest} can exercise it directly. */
     static String statusText(WatchedItem item) {
-        if (!item.enabled) return "PAUSED";
+        if (!item.enabled) return "Paused";
         int n = 0;
         if (item.lineTracker) n++;
         if (item.screenNotifier) n++;
         if (item.highlight) n++;
         if (item.soundPing) n++;
-        return "WATCHING · " + n + " ALERT" + (n == 1 ? "" : "S");
+        return "Watching · " + n + " alert" + (n == 1 ? "" : "s");
     }
 
     private static Widget buildItemCard(OverlayHost host, WatchedItem item, Runnable onRemove) {
@@ -67,7 +67,7 @@ public final class GroundItemsRow {
             () -> item.enabled,
             () -> { item.enabled = !item.enabled; IslesPlusConfig.save(); });
         Label status = new Label(() -> statusText(item), Theme.TEXT_META, Fonts.SMALL).wrap();
-        Button remove = new Button("REMOVE", Button.Kind.ICON, onRemove);
+        Button remove = new Button("Remove", Button.Kind.ICON, onRemove);
 
         TextField keyword = new TextField(
             () -> item.customKeyword,
@@ -85,7 +85,7 @@ public final class GroundItemsRow {
         CheckChip soundChip = new CheckChip("Sound", () -> item.soundPing,
             () -> { item.soundPing = !item.soundPing; IslesPlusConfig.save(); });
 
-        Button editSound = new Button("EDIT SOUND", Button.Kind.PRIMARY,
+        Button editSound = new Button("Edit sound", Button.Kind.PRIMARY,
             () -> EditSoundDialog.open(host, () -> item.soundConfig, v -> item.soundConfig = v,
                 GroundItemsNotifier.DEFAULT_ITEM_SOUND));
         Label summary = new Label(() -> EditSoundDialog.summary(item.soundConfig), Theme.TEXT_META, Fonts.SMALL);
@@ -111,7 +111,7 @@ public final class GroundItemsRow {
     }
 
     /** A sub-card's bevel (SURFACE fill, RAISED lit, SECONDARY shade, SURFACE_RING ring, 5 px
-     * padding), plus the per-frame visibility sync that makes the "EDIT SOUND" button and its
+     * padding), plus the per-frame visibility sync that makes the "Edit sound" button and its
      * summary label appear only while {@link WatchedItem#soundPing} is on. */
     private static final class ItemCard extends Panel {
         private final WatchedItem item;
@@ -156,14 +156,14 @@ public final class GroundItemsRow {
             List<WatchedItem> current = GroundItemsNotifier.watchedItems;
             column.clear();
             if (current.isEmpty()) {
-                column.add(new EmptyBox("NO ITEMS WATCHED YET"));
+                column.add(new EmptyBox("No items watched yet"));
             } else {
                 for (WatchedItem item : current) {
                     column.add(buildItemCard(host, item, () -> removeItem(item)));
                 }
             }
             column.add(new Flow.WrapRow(ROW_GAP, ROW_GAP).align(Flow.Align.CENTER)
-                .add(new Button("ADD ITEM", Button.Kind.PRIMARY, ListBody::addItem).plus()));
+                .add(new Button("Add item", Button.Kind.PRIMARY, ListBody::addItem).plus()));
             builtFrom = new ArrayList<>(current);
         }
 

@@ -3,6 +3,7 @@ package com.islesplus.features.waystonefinder;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
@@ -119,6 +120,7 @@ public final class WaystoneFinder {
     }
 
     public static boolean shouldForceGlow(Entity entity) {
-        return waystoneFinderEnabled && entity != null && glowingEntityIds.contains(entity.getId());
+        // the remote check matters: a killed finder's tick stops, so its set keeps the last entities
+        return waystoneFinderEnabled && !FeatureFlags.isKilled("waystone_finder") && entity != null && glowingEntityIds.contains(entity.getId());
     }
 }

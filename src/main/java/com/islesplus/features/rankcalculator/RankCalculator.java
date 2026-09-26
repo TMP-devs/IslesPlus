@@ -4,6 +4,7 @@ import com.islesplus.IslesClient;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.entity.EntityScanResult;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.scoreboard.ScoreboardDisplaySlot;
@@ -98,6 +99,7 @@ public final class RankCalculator {
 
     /** Every system chat line comes through here so the event broadcast is never missed. */
     public static void onChatMessage(String text) {
+        if (FeatureFlags.isKilled("rank_calculator")) return;
         ActiveEvent announced = ActiveEvent.fromAnnouncement(text);
         if (announced == null) return;
         announcedEvent = announced;

@@ -6,13 +6,16 @@ import com.islesplus.ui.Theme;
 import com.islesplus.ui.Widget;
 import net.minecraft.client.gui.DrawContext;
 
+import java.util.function.Supplier;
+
 /** The oxblood "i" badge from the card headers, for use inside a drawer: hovering it shows a note
  * in the same floating tooltip. */
 final class InfoMark extends Widget {
     private static final int SIZE = 9;
-    private final String note;
+    private final Supplier<String> note;
 
-    InfoMark(String note) { this.note = note; }
+    /** The text is read on every hover, so it can change (remote features_v2.json). */
+    InfoMark(Supplier<String> note) { this.note = note; }
 
     @Override public int prefWidth() { return SIZE; }
 
@@ -27,7 +30,7 @@ final class InfoMark extends Widget {
         ctx.fill(stemX, y + 2, stemX + 1, y + 3, Theme.CREAM);            // dot
         ctx.fill(stemX, y + 4, stemX + 1, y + SIZE - 2, Theme.CREAM);     // stem
         if (mouseX >= x - 1 && mouseX < x + SIZE + 1 && mouseY >= y - 1 && mouseY < y + SIZE + 1) {
-            FeatureRow.hoveredNote = note;
+            FeatureRow.hoveredNote = note.get();
         }
     }
 }

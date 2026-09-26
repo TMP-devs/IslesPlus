@@ -1,3 +1,0 @@
-{ "providers": [
-  { "type": "bitmap", "file": "islesplus:font/slash.png", "height": 5, "ascent": 5, "chars": ["/"] }
-] }

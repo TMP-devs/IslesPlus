@@ -1,5 +1,7 @@
 package com.islesplus.features.plushiefinder;
 
+import com.islesplus.sync.FeatureFlags;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -9,20 +11,27 @@ public final class PlushieFinder {
     private static final Pattern FOUND_PATTERN =
         Pattern.compile("(?i)^you\\s+found\\s+plushy\\s*#?(\\d+).*agility\\s+exp");
     public static boolean plushieFinderEnabled = false;
+    /** Skip plushie #1 (locked behind the tutorial) when picking the nearest one to point at. It
+     * still counts as found or missing everywhere else. */
+    public static boolean hideFirstPlushie = false;
     /** only tag the nearest plushie if it's within this many blocks. 0 = no limit */
     public static int maxDistance = 0;
     public static final int MAX_DISTANCE_CAP = 200;
+    /** Tightest range the slider can set; below this the feature would never tag anything. */
+    private static final int MIN_DISTANCE = 5;
+    /** The last few blocks of travel mean "no limit", so MAX is easy to hit at any slider width. */
+    private static final int MAX_SNAP = MAX_DISTANCE_CAP - MIN_DISTANCE;
 
     private PlushieFinder() {}
 
-    // slider is 0..1, anything under 5 blocks counts as off
+    /** Slider is 0..1: far left is the tightest range, far right is MAX (no limit). */
     public static float maxDistanceSlider() {
-        return maxDistance / (float) MAX_DISTANCE_CAP;
+        return maxDistance <= 0 ? 1f : maxDistance / (float) MAX_DISTANCE_CAP;
     }
 
     public static void setMaxDistanceFromSlider(float v) {
         int blocks = Math.round(v * MAX_DISTANCE_CAP);
-        maxDistance = blocks < 5 ? 0 : blocks;
+        maxDistance = blocks >= MAX_SNAP ? 0 : Math.max(MIN_DISTANCE, blocks);
     }
 
     public static String maxDistanceLabel() {
@@ -31,6 +40,7 @@ public final class PlushieFinder {
 
     /** gets every chat message, marks the plushie owned if it's the "you found plushy #N" line */
     public static void onMessage(String text) {
+        if (FeatureFlags.isKilled("plushie_finder")) return;
         String clean = STRIP_CODES.matcher(text).replaceAll("").trim();
         Matcher m = FOUND_PATTERN.matcher(clean);
         if (!m.find()) return;

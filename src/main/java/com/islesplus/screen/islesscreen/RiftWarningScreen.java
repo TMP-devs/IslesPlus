@@ -18,7 +18,7 @@ class RiftWarningScreen extends Screen {
     private static final int DIALOG_W = 300;
     private static final int PAD = 7;
 
-    private static final String TITLE = "HEADS UP";
+    private static final String TITLE = "Heads up";
     private static final String BODY =
         "Rift features provide gameplay assistance that may affect your " +
         "experience. The Rift is designed to be discovered naturally. " +
@@ -39,16 +39,15 @@ class RiftWarningScreen extends Screen {
             .add(new Label(BODY, Theme.TEXT_LABEL, Fonts.TITLE).wrap())
             .add(new CheckChip("Don't show this again", () -> dontShowAgain, () -> dontShowAgain = !dontShowAgain))
             .add(new Flow.WrapRow(6, 4)
-                .add(new Button("CANCEL", Button.Kind.QUIET, () -> MinecraftClient.getInstance().setScreen(parent)).fill())
-                .add(new Button("ENABLE", Button.Kind.PRIMARY, () -> {
+                .add(new Button("Cancel", Button.Kind.QUIET, () -> MinecraftClient.getInstance().setScreen(parent)).fill())
+                .add(new Button("Enable", Button.Kind.PRIMARY, () -> {
                     if (dontShowAgain) RiftWarningManager.setDismissed();
                     onConfirm.run();
                     MinecraftClient.getInstance().setScreen(parent);
                 }).fill()));
     }
 
-    @Override
-    protected void init() {
+    private void initUi() {
         super.init();
         Fonts.resetFallbackCheck();
     }
@@ -70,8 +69,7 @@ class RiftWarningScreen extends Screen {
         body.layout(bodyX, bodyY, bodyWidth);
     }
 
-    @Override
-    public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+    private void renderUi(DrawContext ctx, int mouseX, int mouseY, float delta) {
         ctx.fill(0, 0, width, height, Theme.SCRIM);
         layoutPanel();
 
@@ -84,21 +82,19 @@ class RiftWarningScreen extends Screen {
             Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK);
 
         int textH = Fonts.height(Fonts.BODY);
-        Fonts.drawCentered(ctx, TITLE, panelX + panelW / 2, panelY + (Metrics.DIALOG_TITLE_H - textH) / 2, Theme.CREAM, Fonts.BODY);
+        Fonts.drawHeading(ctx, TITLE, panelX + (panelW - Fonts.headingWidth(TITLE, Fonts.BODY)) / 2, panelY + (Metrics.DIALOG_TITLE_H - textH) / 2, Theme.CREAM, Fonts.BODY);
 
         body.render(ctx, mouseX, mouseY);
     }
 
-    @Override
-    public boolean mouseClicked(Click click, boolean doubled) {
+    private boolean mouseClickedUi(Click click, boolean doubled) {
         if (click.button() != 0) return super.mouseClicked(click, doubled);
         layoutPanel();
         body.mouseClicked(click.x(), click.y(), click.button());
         return true;
     }
 
-    @Override
-    public boolean mouseReleased(Click click) {
+    private boolean mouseReleasedUi(Click click) {
         body.mouseReleased();
         return super.mouseReleased(click);
     }
@@ -107,4 +103,10 @@ class RiftWarningScreen extends Screen {
     public boolean shouldCloseOnEsc() {
         return false;
     }
+
+    // /ip UI: its text is in the Isles+ faces (Fonts.islesUi), everything else's in the game's font.
+    @Override protected void init() { Fonts.islesUi(this::initUi); }
+    @Override public void render(DrawContext ctx, int mouseX, int mouseY, float delta) { Fonts.islesUi(() -> renderUi(ctx, mouseX, mouseY, delta)); }
+    @Override public boolean mouseClicked(Click click, boolean doubled) { return Fonts.islesUi(() -> mouseClickedUi(click, doubled)); }
+    @Override public boolean mouseReleased(Click click) { return Fonts.islesUi(() -> mouseReleasedUi(click)); }
 }

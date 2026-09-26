@@ -66,7 +66,7 @@ public class Dropdown extends Widget {
         } else {
             // LIGHT: transparent on its parent; no background/ring when closed, hover fill only.
             if (hover) ctx.fill(x, y, x + w, y + h, Theme.RAISED_HOVER);
-            textC = Theme.INK_DEEP;
+            textC = Theme.TEXT_STRONG;
             caretC = Theme.SURFACE_RING;
         }
 
@@ -169,7 +169,7 @@ public class Dropdown extends Widget {
                 int bg = style == Style.DARK ? Theme.WELL : Theme.RAISED;
                 int textC = style == Style.DARK ? Theme.WELL_TEXT_DIM : Theme.TEXT_FOOT;
                 ctx.fill(x, y, x + w, y + rowH, bg);
-                Fonts.draw(ctx, "NO MATCHES", x + 4, y + (rowH - textH) / 2, textC, Fonts.BODY);
+                Fonts.draw(ctx, "No matches", x + 4, y + (rowH - textH) / 2, textC, Fonts.BODY);
                 return;
             }
 
@@ -183,7 +183,7 @@ public class Dropdown extends Widget {
                 } else if (style == Style.DARK) {
                     bg = Theme.WELL; textC = Theme.WELL_ROW_TEXT; dotC = Theme.OFF_TRACK; metaC = Theme.WELL_META;
                 } else {
-                    bg = Theme.RAISED; textC = Theme.INK_DEEP; dotC = Theme.SECONDARY; metaC = Theme.TEXT_FOOT;
+                    bg = Theme.RAISED; textC = Theme.TEXT_STRONG; dotC = Theme.SECONDARY; metaC = Theme.TEXT_FOOT;
                 }
                 ctx.fill(x, rowY, x + w, rowY + rowH, bg);
                 if (!isSelected) {

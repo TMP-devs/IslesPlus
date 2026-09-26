@@ -5,6 +5,7 @@ import net.minecraft.client.font.TextRenderer;
 import net.minecraft.client.render.LightmapTextureManager;
 import net.minecraft.client.render.VertexConsumerProvider;
 import net.minecraft.client.util.math.MatrixStack;
+import net.minecraft.text.Text;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.RotationAxis;
 import net.minecraft.util.math.Vec3d;
@@ -20,6 +21,16 @@ public final class WorldTagRenderer {
                                float yaw, float pitch,
                                double wx, double wy, double wz,
                                String text, int textColor, int bgColor,
+                               float scaleMult, VertexConsumerProvider consumers) {
+        drawTag(client, matrices, camPos, yaw, pitch, wx, wy, wz, Text.literal(text), textColor, bgColor, scaleMult, consumers);
+    }
+
+    /** The same tag for styled text: runs in their own colour or font (a {@code Fonts.symbol}
+     * glyph, say); {@code textColor} is used where the text sets none. */
+    public static void drawTag(MinecraftClient client, MatrixStack matrices, Vec3d camPos,
+                               float yaw, float pitch,
+                               double wx, double wy, double wz,
+                               Text text, int textColor, int bgColor,
                                float scaleMult, VertexConsumerProvider consumers) {
         double dx = wx - camPos.x;
         double dy = wy - camPos.y;

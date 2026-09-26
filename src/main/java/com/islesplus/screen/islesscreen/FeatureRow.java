@@ -13,7 +13,6 @@ import net.minecraft.client.input.CharInput;
 import net.minecraft.client.input.KeyInput;
 
 import java.util.List;
-import java.util.Locale;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -33,18 +32,19 @@ public final class FeatureRow extends Widget {
     /** Tooltip requested by whichever badge the mouse is over this frame; the screen draws it last,
      * above every card and outside the grid scissor, then clears it. */
     public static String hoveredNote;
-    private static final String DISABLED_LABEL = "DISABLED";
-    /** Shown when the pointer is over a remotely disabled card's DISABLED chip. */
-    private static final String DISABLED_NOTE = "This feature is currently under maintenance and will return shortly.";
+    private static final String DISABLED_LABEL = "Disabled";
+    /** Shown when the pointer is over a remotely disabled card's DISABLED chip and the remote
+     * entry gave no reason of its own. */
+    private static final String DISABLED_NOTE = "This feature is currently under maintenance.";
     private static final int DISABLED_PAD_X = 6;
-    private static final String BETA_LABEL = "BETA";
+    private static final String BETA_LABEL = "Beta";
 
     private final String title;
-    private final String titleUpper;
     private final String description;                           // nullable
     private String killedKey;
-    private String note;                                        // nullable; shown as a badge + tooltip
-    private boolean beta;                                       // small oxblood "BETA" after the badge
+    private String tooltipKey;                                  // nullable; features_v2.json tooltip key, defaults to killedKey
+    private String note;                                        // nullable; built-in tooltip text
+    private boolean beta;                                       // small oxblood "Beta" after the badge
     private BigToggle toggle;
     private Widget drawer;
 
@@ -66,12 +66,31 @@ public final class FeatureRow extends Widget {
 
     public FeatureRow(String title, String description) {
         this.title = title;
-        this.titleUpper = title.toUpperCase(Locale.ROOT);
         this.description = description;
     }
 
-    /** A note for this feature: drawn as a small oxblood "i" badge after the title, text shown on hover. */
+    /** Whether this card matches the /ip search box (title or description, every word). */
+    public boolean matchesSearch(String query) { return RowsText.matchesSearch(title, description, query); }
+
+    /** A note for this feature: drawn as a small oxblood "i" badge after the title, text shown on hover.
+     * This is the built-in text; features_v2.json can replace or remove it (see {@link #currentNote}). */
     public FeatureRow note(String text) { this.note = text; return this; }
+
+    /** Key this card's tooltip goes by in features_v2.json. Only needed for a card without a
+     * {@link #killedKey}, which is used otherwise. */
+    public FeatureRow tooltipKey(String key) { this.tooltipKey = key; return this; }
+
+    /** The tooltip to show right now: features_v2.json's text for this card, else the built-in note.
+     * null = no badge. */
+    private String currentNote() {
+        return FeatureFlags.tooltip(flagKey(), note);
+    }
+
+    /** The features_v2.json key for display settings (tooltip, beta): tooltipKey, else killedKey. */
+    private String flagKey() { return tooltipKey != null ? tooltipKey : killedKey; }
+
+    /** Whether the BETA tag shows: the json's "beta" when it sets one, else {@link #beta()}. */
+    private boolean showsBeta() { return FeatureFlags.beta(flagKey(), beta); }
 
     /** Marks the feature as beta: a small oxblood "BETA" tag after the title (and the info badge). */
     public FeatureRow beta() { this.beta = true; return this; }
@@ -86,22 +105,31 @@ public final class FeatureRow extends Widget {
     /** Giving the row a drawer body is what makes the caret button appear. */
     public FeatureRow drawer(Widget body) { this.drawer = body; return this; }
 
-    /** Card width at which the upper-cased title fits on one line beside the caret and the toggle. */
+    /** Card width at which the title fits on one line beside the caret and the toggle. */
     public int widthForFullTitle() {
-        // A card that can be remotely disabled must also fit its DISABLED chip, which is wider than
-        // the toggle (the caret is hidden then, which gives some of that width back).
+        // A card that can be remotely disabled must also fit its Disabled chip, which is wider than
+        // the toggle.
         int control = toggle != null ? Metrics.BIG_TOGGLE_W : 0;
-        if (killedKey != null) control = Math.max(control, disabledChipW() - (drawer != null ? Metrics.CARET + GAP : 0));
-        int chrome = 2 * PAD + (drawer != null ? Metrics.CARET + GAP : 0) + (control > 0 ? GAP + control : 0)
-            + (note != null ? BADGE + BADGE_GAP : 0)
-            + (beta ? Fonts.width(BETA_LABEL, Fonts.SMALL) + BADGE_GAP : 0);
-        return chrome + Fonts.width(titleUpper, Fonts.TITLE) + 2;
+        if (killedKey != null) control = Math.max(control, disabledChipW());
+        int chrome = 2 * PAD + Metrics.CARET + GAP + (control > 0 ? GAP + control : 0)
+            + (currentNote() != null ? BADGE + BADGE_GAP : 0)
+            + (showsBeta() ? Fonts.width(BETA_LABEL, Fonts.SMALL) + BADGE_GAP : 0);
+        return chrome + Fonts.width(title, Fonts.TITLE) + 2;
     }
 
     private static int disabledChipW() { return 2 * DISABLED_PAD_X + Fonts.width(DISABLED_LABEL, Fonts.BODY); }
 
     /** True when this feature is switched off by the remote kill switch. */
     public boolean killed() { return killedKey != null && FeatureFlags.isKilled(killedKey); }
+
+    /** True when the json has this feature "killed": the screen leaves the card out entirely. */
+    public boolean hidden() { return killedKey != null && FeatureFlags.isHidden(killedKey); }
+
+    /** Tooltip for a DISABLED chip: the remote reason for {@code key}, else the generic maintenance line. */
+    public static String disabledNote(String key) {
+        String reason = FeatureFlags.disabledReason(key);
+        return reason.isEmpty() ? DISABLED_NOTE : reason;
+    }
 
     private boolean drawerOpen() { return drawer != null && expanded && !killed(); }
 
@@ -111,7 +139,7 @@ public final class FeatureRow extends Widget {
         this.x = x; this.y = y; this.w = width;
         boolean killed = killed();
         boolean hasCaret = drawer != null && !killed;
-        boolean showNote = note != null && !killed;
+        boolean showNote = currentNote() != null && !killed;
 
         int innerX = x + PAD;
         int innerW = Math.max(1, width - 2 * PAD);
@@ -130,7 +158,9 @@ public final class FeatureRow extends Widget {
         // One header line: the caret button, the title and the toggle share a centre line. The
         // description sits below it and may use the full width under the toggle.
         int titleRowH = Math.max(hasCaret ? Metrics.CARET : Metrics.TITLE_LINE_H, controlH);
-        textX = innerX + (hasCaret ? Metrics.CARET + GAP : 0);
+        // The caret's column is kept on every card, so titles line up down the grid whether or not a
+        // card has a drawer (or is disabled, which hides its caret).
+        textX = innerX + Metrics.CARET + GAP;
         int textRight = innerX + innerW - (controlW > 0 ? controlW + GAP : 0);
         textW = Math.max(1, textRight - textX);              // title only
         int bodyW = Math.max(1, innerX + innerW - textX);     // description
@@ -147,11 +177,11 @@ public final class FeatureRow extends Widget {
         int contentH = titleRowH;
         if (!descLines.isEmpty()) contentH += TITLE_GAP + descLines.size() * Metrics.LINE_H;
         // After the title, left to right: the info badge, then the BETA tag.
-        boolean showBeta = beta && !killed;
+        boolean showBeta = showsBeta() && !killed;
         int betaW = showBeta ? Fonts.width(BETA_LABEL, Fonts.SMALL) : 0;
         int extrasW = (showBeta ? betaW + BADGE_GAP : 0) + (showNote ? BADGE + BADGE_GAP : 0);
         titleSpace = Math.max(1, textW - extrasW);
-        int titleW = Math.min(Fonts.width(titleUpper, Fonts.TITLE), titleSpace);
+        int titleW = Math.min(Fonts.width(title, Fonts.TITLE), titleSpace);
         badgeX = textX + titleW + BADGE_GAP;
         badgeY = top + (titleRowH - BADGE) / 2;
         betaX = badgeX + (showNote ? BADGE + BADGE_GAP : 0);
@@ -191,11 +221,11 @@ public final class FeatureRow extends Widget {
                 expanded ? Draw.Dir.DOWN : Draw.Dir.RIGHT, Theme.TEXT_LABEL);
         }
 
-        boolean showBadge = note != null && !killed;
-        int titleMax = Math.max(0, (int) Math.floor(titleSpace / (double) Fonts.snap(Fonts.TITLE)));
-        Fonts.draw(ctx, Fonts.ellipsize(titleUpper, titleMax), textX, titleY,
+        String shownNote = killed ? null : currentNote();
+        boolean showBadge = shownNote != null;
+        Fonts.draw(ctx, Fonts.ellipsize(title, titleSpace, Fonts.TITLE), textX, titleY,
             killed ? Theme.DISABLED_TEXT : Theme.INK_DEEP, Fonts.TITLE);
-        if (beta && !killed) Fonts.draw(ctx, BETA_LABEL, betaX, betaY, Theme.OXBLOOD, Fonts.SMALL);
+        if (showsBeta() && !killed) Fonts.draw(ctx, BETA_LABEL, betaX, betaY, Theme.OXBLOOD, Fonts.SMALL);
         int descColour = killed ? Theme.DISABLED_TEXT : Theme.TEXT_BODY;
         for (int i = 0; i < descLines.size(); i++) {
             Fonts.draw(ctx, descLines.get(i), textX, descY + i * Metrics.LINE_H, descColour);
@@ -207,7 +237,7 @@ public final class FeatureRow extends Widget {
             ctx.fill(stemX, badgeY + 2, stemX + 1, badgeY + 3, Theme.CREAM);              // dot
             ctx.fill(stemX, badgeY + 4, stemX + 1, badgeY + BADGE - 2, Theme.CREAM);      // stem
             if (mouseX >= badgeX - 1 && mouseX < badgeX + BADGE + 1 && mouseY >= badgeY - 1 && mouseY < badgeY + BADGE + 1) {
-                hoveredNote = note;
+                hoveredNote = shownNote;
             }
         }
 
@@ -218,7 +248,7 @@ public final class FeatureRow extends Widget {
             Fonts.drawCentered(ctx, DISABLED_LABEL, controlX + controlW / 2,
                 controlY + (controlH - textH) / 2, Theme.DISABLED_TEXT, Fonts.BODY);
             if (mouseX >= controlX && mouseX < controlX + controlW && mouseY >= controlY && mouseY < controlY + controlH) {
-                hoveredNote = DISABLED_NOTE;
+                hoveredNote = disabledNote(killedKey);
             }
         } else if (toggle != null) {
             toggle.render(ctx, mouseX, mouseY);

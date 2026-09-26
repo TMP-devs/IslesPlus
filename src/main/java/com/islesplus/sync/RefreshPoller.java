@@ -64,6 +64,7 @@ public final class RefreshPoller {
     private static void pollLoop() {
         // check once right away (we only get started in safe worlds anyway)
         checkOnce(false);
+        AnnouncementFeed.refresh();
         while (!Thread.currentThread().isInterrupted()) {
             try {
                 Thread.sleep(POLL_INTERVAL_MS);
@@ -73,6 +74,7 @@ public final class RefreshPoller {
             }
             if (isSafeWorld(WorldIdentification.world)) {
                 checkOnce(false);
+                AnnouncementFeed.refresh();
             }
         }
     }

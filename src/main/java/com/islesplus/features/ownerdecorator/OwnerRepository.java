@@ -24,6 +24,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class OwnerRepository {
+    /** one client for every fetch: a new one each time would each keep a thread until GC */
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private static final String JSON_URL = "https://tmp-devs.github.io/islesplusjson/people.json";
     private static final String SIG_URL  = "https://tmp-devs.github.io/islesplusjson/people.json.sig";
 
@@ -78,9 +80,7 @@ public final class OwnerRepository {
     public static boolean fetchAndVerify() {
         boolean hasVerifiedData = owners != FALLBACK_OWNERS;
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(8))
-                .build();
+            HttpClient client = HTTP;
             String json = fetch(client, JSON_URL);
             String sig  = fetch(client, SIG_URL);
             if (json == null || sig == null) {

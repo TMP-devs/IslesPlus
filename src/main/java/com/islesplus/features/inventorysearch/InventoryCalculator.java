@@ -4,7 +4,6 @@ import com.islesplus.ui.Draw;
 import com.islesplus.ui.Fonts;
 import com.islesplus.ui.Theme;
 import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.client.input.KeyInput;
 import org.lwjgl.glfw.GLFW;
 
@@ -43,18 +42,14 @@ public final class InventoryCalculator {
 
     // ---- Dimension helpers ----
 
-    static int panelX(int barX, int screenW) {
-        int pw = getPanelWidth();
-        int px = barX;
-        if (px + pw > screenW - 2) px = screenW - pw - 2;
-        if (px < 2) px = 2;
-        return px;
+    /** The panel hangs under the bar, or over it when there is no room below (decided by the
+     * caller, which knows where the bar is on screen). Coordinates are the bar's own. */
+    static int panelX(int barX) {
+        return barX;
     }
 
-    static int panelY(int barY, int screenH) {
-        int ph = getPanelHeight();
-        boolean atBottom = barY + InventorySearch.BAR_H + ph > screenH;
-        return atBottom ? barY - ph - 2 : barY + InventorySearch.BAR_H + 2;
+    static int panelY(int barY, boolean above) {
+        return above ? barY - getPanelHeight() - 2 : barY + InventorySearch.BAR_H + 2;
     }
 
     static int getPanelWidth() {
@@ -79,11 +74,11 @@ public final class InventoryCalculator {
 
     // ---- Rendering ----
 
-    static void render(DrawContext ctx, int barX, int barY, int screenW, int screenH) {
+    static void render(DrawContext ctx, int barX, int barY, boolean above) {
         if (!open) return;
 
-        int px = panelX(barX, screenW);
-        int py = panelY(barY, screenH);
+        int px = panelX(barX);
+        int py = panelY(barY, above);
         int pw = getPanelWidth();
         int ph = getPanelHeight();
 
@@ -98,7 +93,7 @@ public final class InventoryCalculator {
         int displayW = pw - PANEL_PAD * 2;
         Draw.well(ctx, innerX, curY, displayW, DISPLAY_H, Theme.INK_DEEP);
 
-        // DEG/RAD indicator — small chip, top-left of display, clickable.
+        // DEG/RAD indicator, small chip, top-left of display, clickable.
         // Click rect in handleClick() is recomputed from this same Fonts.width(...) call.
         String modeLabel = radiansMode ? "RAD" : "DEG";
         int chipW = Fonts.width(modeLabel, Fonts.SMALL) + 4;
@@ -156,11 +151,11 @@ public final class InventoryCalculator {
 
     // ---- Click handling ----
 
-    static boolean handleClick(Screen screen, double mx, double my, int barX, int barY) {
+    static boolean handleClick(double mx, double my, int barX, int barY, boolean above) {
         if (!open) return false;
 
-        int px = panelX(barX, screen.width);
-        int py = panelY(barY, screen.height);
+        int px = panelX(barX);
+        int py = panelY(barY, above);
         int pw = getPanelWidth();
         int ph = getPanelHeight();
 
@@ -168,7 +163,7 @@ public final class InventoryCalculator {
 
         int innerX = px + PANEL_PAD;
 
-        // DEG/RAD indicator click (top-left of display) — same chip bounds as drawn in render()
+        // DEG/RAD indicator click (top-left of display), same chip bounds as drawn in render()
         String modeLabel = radiansMode ? "RAD" : "DEG";
         int chipW = Fonts.width(modeLabel, Fonts.SMALL) + 4;
         int chipH = 9;

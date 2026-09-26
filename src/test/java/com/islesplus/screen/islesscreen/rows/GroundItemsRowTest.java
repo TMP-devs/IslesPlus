@@ -18,22 +18,22 @@ class GroundItemsRowTest {
     }
 
     @Test void disabledItemIsPaused() {
-        assertEquals("PAUSED", GroundItemsRow.statusText(item(false, true, true, true, true)));
+        assertEquals("Paused", GroundItemsRow.statusText(item(false, true, true, true, true)));
     }
 
     @Test void enabledWithNoAlertsShowsZero() {
-        assertEquals("WATCHING · 0 ALERTS", GroundItemsRow.statusText(item(true, false, false, false, false)));
+        assertEquals("Watching · 0 alerts", GroundItemsRow.statusText(item(true, false, false, false, false)));
     }
 
     @Test void enabledWithOneAlertUsesSingular() {
-        assertEquals("WATCHING · 1 ALERT", GroundItemsRow.statusText(item(true, true, false, false, false)));
+        assertEquals("Watching · 1 alert", GroundItemsRow.statusText(item(true, true, false, false, false)));
     }
 
     @Test void enabledWithAllFourAlertsUsesPlural() {
-        assertEquals("WATCHING · 4 ALERTS", GroundItemsRow.statusText(item(true, true, true, true, true)));
+        assertEquals("Watching · 4 alerts", GroundItemsRow.statusText(item(true, true, true, true, true)));
     }
 
     @Test void countsOnlyTrueFlags() {
-        assertEquals("WATCHING · 2 ALERTS", GroundItemsRow.statusText(item(true, true, false, true, false)));
+        assertEquals("Watching · 2 alerts", GroundItemsRow.statusText(item(true, true, false, true, false)));
     }
 }

@@ -6,7 +6,7 @@ public final class ChatFilter {
     public static boolean chatFilterEnabled = false;
     public static boolean filterManaMeteor = true;
     public static boolean filterGuildChat = false;
-    public static boolean filterDeaths = false;
+    public static boolean filterDeaths = true;
 
     private static final String MANA_METEOR_PREFIX = "(!!!) A Mana Meteor has crashed down near ";
 

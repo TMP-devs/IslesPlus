@@ -154,7 +154,7 @@ class FlowTest {
         assertTrue(elsewhere.unfocusCalled);
     }
 
-    /** Logs "commit" the first time unfocus() is called and never again — idempotent, like a
+    /** Logs "commit" the first time unfocus() is called and never again, idempotent, like a
      * well-behaved field (e.g. HexField). */
     static class LoggingField extends Widget {
         private final java.util.List<String> log;

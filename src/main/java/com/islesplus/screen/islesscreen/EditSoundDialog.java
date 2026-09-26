@@ -25,7 +25,7 @@ import java.util.function.Supplier;
  * Modal dialog for editing a {@link SoundConfig} in place: a sound picker dropdown, volume and
  * pitch sliders, and test/reset/done buttons. Mutates the live {@code SoundConfig} returned by
  * {@code get.get()} and calls {@code set.accept(cfg)} after every mutation; {@link IslesPlusConfig#save()}
- * runs on dropdown select, on slider release, on RESET and on close — never on every drag tick.
+ * runs on dropdown select, on slider release, on RESET and on close, never on every drag tick.
  */
 public final class EditSoundDialog {
     private static final int ROW_GAP = 4;
@@ -69,33 +69,33 @@ public final class EditSoundDialog {
             IslesPlusConfig::save)
             .fill(Theme.PITCH_FILL, Theme.PITCH_LIT, Theme.PITCH_SHADE);
 
-        Button testButton = new Button("TEST SOUND", Button.Kind.SECONDARY, () -> {
+        Button testButton = new Button("Test sound", Button.Kind.SECONDARY, () -> {
             ModSounds.playConfig(MinecraftClient.getInstance(), get.get());
             tested[0] = true;
         }).fill();
-        testButton.label(() -> tested[0] ? "TEST AGAIN" : "TEST SOUND");
+        testButton.label(() -> tested[0] ? "Test again" : "Test sound");
 
-        Button resetButton = new Button("RESET", Button.Kind.QUIET, () -> {
+        Button resetButton = new Button("Reset", Button.Kind.QUIET, () -> {
             SoundConfig cfg = get.get();
             cfg.copyFrom(defaults);
             set.accept(cfg);
             IslesPlusConfig.save();
         }).fill();
 
-        Button doneButton = new Button("DONE", Button.Kind.PRIMARY, () -> {
+        Button doneButton = new Button("Done", Button.Kind.PRIMARY, () -> {
             IslesPlusConfig.save();
             host.closeOverlay(dialogRef[0]);
         }).fill();
 
         Widget body = new Flow.Column(7)
-            .add(new Label("SOUND", Theme.TEXT_META, Fonts.SMALL))
+            .add(new Label("Sound", Theme.TEXT_META, Fonts.SMALL))
             .add(dropdown)
             .add(new Flow.WrapRow(ROW_GAP, ROW_GAP)
-                .add(new Label("VOLUME", Theme.TEXT_META, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "VOLUME", "PITCH")))
+                .add(new Label("Volume", Theme.TEXT_META, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "Volume", "Pitch")))
                 .add(volumeSlider)
                 .add(new InfoChip(() -> Math.round(get.get().volume * 100) + "%").fixed(Metrics.VALUE_CHIP_W)))
             .add(new Flow.WrapRow(ROW_GAP, ROW_GAP)
-                .add(new Label("PITCH", Theme.TEXT_META, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "VOLUME", "PITCH")))
+                .add(new Label("Pitch", Theme.TEXT_META, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "Volume", "Pitch")))
                 .add(pitchSlider)
                 .add(new InfoChip(() -> String.format(Locale.ROOT, "%.2f", get.get().pitch)).fixed(Metrics.VALUE_CHIP_W)))
             .add(new Flow.WrapRow(ROW_GAP, ROW_GAP)
@@ -103,7 +103,7 @@ public final class EditSoundDialog {
                 .add(resetButton)
                 .add(doneButton));
 
-        Dialog dialog = new Dialog(host, "EDIT SOUND", body, IslesPlusConfig::save);
+        Dialog dialog = new Dialog(host, "Edit sound", body, IslesPlusConfig::save);
         dialogRef[0] = dialog;
         host.openOverlay(dialog);
     }

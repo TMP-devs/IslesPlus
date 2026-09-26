@@ -52,7 +52,7 @@ public class BigToggle extends Widget {
         int textH = Fonts.height(Fonts.SMALL);
         int textY = y + (h - textH) / 2;
         int textCx = on ? x + half / 2 : x + w - half / 2;
-        Fonts.drawCentered(ctx, on ? "ON" : "OFF", textCx, textY, on ? Theme.CREAM : Theme.OFF_TEXT, Fonts.SMALL);
+        Fonts.drawControlCentered(ctx, on ? "On" : "Off", textCx, textY, on ? Theme.CREAM : Theme.OFF_TEXT, Fonts.SMALL);
 
         int knobFill = on ? Theme.CREAM : Theme.KNOB_OFF;
         Draw.ring(ctx, knobX, knobY, knobW, knobH, Theme.INK);

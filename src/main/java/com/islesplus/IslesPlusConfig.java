@@ -1,5 +1,10 @@
 package com.islesplus;
 
+import com.islesplus.features.bosstracker.BossTimerHud;
+import com.islesplus.features.harvestables.HarvestableHighlighter;
+import com.islesplus.hud.HudAnchor;
+import com.islesplus.hud.HudLayout;
+import com.islesplus.hud.HudPlacement;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
@@ -7,25 +12,33 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.islesplus.features.chatfilter.ChatFilter;
-import com.islesplus.sound.ModSounds;
+import com.islesplus.sync.Announcements;
 import com.islesplus.sound.SoundConfig;
 
-import java.util.ArrayList;
 import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.autoparty.AutoParty;
 import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
 import com.islesplus.features.inventorysearch.InventorySearch;
 import com.islesplus.features.chestfinder.ChestFinder;
+import com.islesplus.features.berryalert.BerryAlert;
+import com.islesplus.features.foodbuff.FoodBuffTimer;
+import com.islesplus.features.voidrift.VoidRiftTimer;
+import com.islesplus.features.eggtimer.EggTimer;
+import com.islesplus.features.storagecount.StorageCount;
+import com.islesplus.features.treasurechest.TreasureChestFinder;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.inventorynotifier.InventoryNotifier;
 import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.nodealertmanager.NodeAlertManager;
 import com.islesplus.features.noderadius.NodeRadiusRenderer;
 import com.islesplus.features.harvesttimer.HarvestTimer;
+import com.islesplus.features.rollpercent.ItemAge;
+import com.islesplus.features.rollpercent.RollPercent;
 import com.islesplus.features.plushiefinder.PlushieFinder;
 import com.islesplus.features.playerfinder.PlayerFinder;
 import com.islesplus.features.rankcalculator.RankCalculator;
 import com.islesplus.features.qtetracker.QteTracker;
+import com.islesplus.features.quickactions.QuickActions;
 import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.slotlocker.SlotLocker;
 import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
@@ -65,6 +78,9 @@ public final class IslesPlusConfig {
         if (obj == null) return;
 
         IslesClient.chatUpdatesEnabled                    = getBool(obj,  "chatUpdatesEnabled",              false);
+        Announcements.lastShownId                         = getString(obj, "lastAnnouncementId",             "");
+        Announcements.lastShownIssued                     = getString(obj, "lastAnnouncementIssued",         "");
+        Announcements.restoreFeed();
         IslesClient.modOnlySoundsEnabled                  = getBool(obj,  "modOnlySoundsEnabled",            false);
         InventoryNotifier.inventoryFullNotifyEnabled = getBool(obj,  "inventoryFullNotifyEnabled", false);
         InventoryNotifier.soundConfig = loadSoundConfig(obj, "inventoryFull",
@@ -72,6 +88,20 @@ public final class IslesPlusConfig {
         DropNotifier.dropNotifyEnabled = getBool(obj, "dropNotifyEnabled", true);
         DropNotifier.soundConfig = loadSoundConfig(obj, "dropNotify",
             DropNotifier.soundConfig);
+        TreasureChestFinder.treasureChestsEnabled = getBool(obj, "treasureChestsEnabled", true);
+        FoodBuffTimer.foodBuffTimerEnabled = getBool(obj, "foodBuffTimerEnabled", true);
+        VoidRiftTimer.mode = VoidRiftTimer.Mode.ALERT;
+        if (obj.has("voidRiftMode")) {
+            try { VoidRiftTimer.mode = VoidRiftTimer.Mode.valueOf(obj.get("voidRiftMode").getAsString()); }
+            catch (RuntimeException ignored) {}
+        }
+        VoidRiftTimer.soundConfig = loadSoundConfig(obj, "voidRift", VoidRiftTimer.soundConfig);
+        EggTimer.eggTimerEnabled = getBool(obj, "eggTimerEnabled", true);
+        StorageCount.storageCountEnabled = getBool(obj, "storageCountEnabled", true);
+        EggTimer.soundConfig = loadSoundConfig(obj, "eggTimer", EggTimer.soundConfig);
+        BerryAlert.berryAlertEnabled = getBool(obj, "berryAlertEnabled", true);
+        BerryAlert.soundConfig = loadSoundConfig(obj, "berryAlert",
+            BerryAlert.soundConfig);
         NodeAlertManager.depletionPingEnabled = getBool(obj, "depletionPingEnabled", false);
         NodeAlertManager.depletionSoundConfig = loadSoundConfig(obj, "depletionPing",
             NodeAlertManager.depletionSoundConfig);
@@ -80,7 +110,26 @@ public final class IslesPlusConfig {
         NodeRadiusRenderer.nodeRadiusEnabled        = getBool(obj, "nodeRadiusEnabled",               false);
         PlushieFinder.plushieFinderEnabled          = getBool(obj, "plushieFinderEnabled",            false);
         PlushieFinder.maxDistance                   = getInt(obj,  "plushieMaxDistance",              0);
+        PlushieFinder.hideFirstPlushie              = getBool(obj, "plushieHideFirst",                false);
         SlotLocker.slotLockEnabled                  = getBool(obj, "slotLockEnabled",                 true);
+        HarvestableHighlighter.enabled              = getBool(obj,  "harvestableHighlighterEnabled",   false);
+        HarvestableHighlighter.waypoints            = getBool(obj,  "harvestableWaypoints",            true);
+        JsonObject harvestColors = obj.has("harvestableColors") && obj.get("harvestableColors").isJsonObject()
+            ? obj.getAsJsonObject("harvestableColors") : new JsonObject();
+        for (HarvestableHighlighter.Harvestable h : HarvestableHighlighter.Harvestable.values()) {
+            JsonObject c = harvestColors.has(h.name()) && harvestColors.get(h.name()).isJsonObject()
+                ? harvestColors.getAsJsonObject(h.name()) : new JsonObject();
+            h.hue        = getFloat(c, "hue",        h.defaultHue);
+            h.saturation = getFloat(c, "saturation", 1.0f);
+            h.lightness  = getFloat(c, "lightness",  0.5f);
+        }
+        HarvestableHighlighter.hidden.clear();
+        if (obj.has("harvestableHidden") && obj.get("harvestableHidden").isJsonArray()) {
+            for (JsonElement el : obj.getAsJsonArray("harvestableHidden")) {
+                try { HarvestableHighlighter.hidden.add(HarvestableHighlighter.Harvestable.valueOf(el.getAsString())); }
+                catch (RuntimeException ignored) {}
+            }
+        }
         ChestFinder.chestFinderEnabled              = getBool(obj,  "chestFinderEnabled",              false);
         ChestFinder.glowHue                         = getFloat(obj, "chestFinderGlowHue",             0.128f);
         ChestFinder.glowSaturation                  = getFloat(obj, "chestFinderGlowSaturation",      1.0f);
@@ -89,7 +138,7 @@ public final class IslesPlusConfig {
         MobFinder.glowHue                           = getFloat(obj, "mobFinderGlowHue",               0.617f);
         MobFinder.glowSaturation                    = getFloat(obj, "mobFinderGlowSaturation",        1.0f);
         MobFinder.glowLightness                     = getFloat(obj, "mobFinderGlowLightness",         0.5f);
-        PlayerFinder.playerFinderEnabled            = getBool(obj,  "playerFinderEnabled",             true);
+        PlayerFinder.playerFinderEnabled            = getBool(obj,  "playerFinderEnabled",             false);
         PlayerFinder.glowHue                        = getFloat(obj, "playerFinderGlowHue",            0.333f);
         PlayerFinder.glowSaturation                 = getFloat(obj, "playerFinderGlowSaturation",     1.0f);
         PlayerFinder.glowLightness                  = getFloat(obj, "playerFinderGlowLightness",      0.5f);
@@ -109,14 +158,30 @@ public final class IslesPlusConfig {
         RankCalculator.showPlayerCount              = getBool(obj, "rankShowPlayerCount",              false);
         RankCalculator.showRankDropTimer            = getBool(obj, "rankShowDropTimer",                false);
         HarvestTimer.harvestTimerEnabled            = getBool(obj, "harvestTimerEnabled",             false);
-        QteTracker.qteTrackerEnabled  = getBool(obj,  "qteTrackerEnabled",   true);
+        RollPercent.rollPercentEnabled              = getBool(obj, "rollPercentEnabled",              true);
+        ItemAge.itemAgeEnabled                      = getBool(obj, "itemAgeEnabled",                  true);
+        QteTracker.qteTrackerEnabled  = getBool(obj,  "qteTrackerEnabled",   false);
         GroundItemsNotifier.groundItemsNotifierEnabled = getBool(obj, "groundItemsNotifierEnabled", false);
         BossTracker.bossTrackerEnabled = getBool(obj, "bossTrackerEnabled", false);
         BossTracker.autoOpenBossary    = getBool(obj, "bossAutoOpen", false);
-        if (obj.has("bossHudPosition")) {
-            try { BossTracker.hudPosition = BossTracker.BossHudPosition.valueOf(obj.get("bossHudPosition").getAsString()); }
-            catch (RuntimeException ignored) {}
-        }
+        HudLayout.load(obj.has("hudLayout") && obj.get("hudLayout").isJsonObject() ? obj.getAsJsonObject("hudLayout") : null);
+        // Before the HUD editor these two only had fixed corners: keep the corner that was picked.
+        HudPlacement oldBoss = switch (getString(obj, "bossHudPosition", "")) {
+            case "TOP_RIGHT"    -> new HudPlacement(HudAnchor.END,   HudAnchor.START, 10, 10);
+            case "BOTTOM_LEFT"  -> new HudPlacement(HudAnchor.START, HudAnchor.END,   10, 10);
+            case "BOTTOM_RIGHT" -> new HudPlacement(HudAnchor.END,   HudAnchor.END,   10, 10);
+            default -> null;
+        };
+        if (oldBoss != null) HudLayout.migrate(BossTimerHud.ELEMENT, oldBoss);
+        HudPlacement oldBar = switch (getString(obj, "searchBarPosition", "")) {
+            case "TOP_CENTER"    -> new HudPlacement(HudAnchor.CENTER, HudAnchor.START, 0, 4);
+            case "TOP_RIGHT"     -> new HudPlacement(HudAnchor.END,    HudAnchor.START, 4, 4);
+            case "BOTTOM_LEFT"   -> new HudPlacement(HudAnchor.START,  HudAnchor.END,   4, 4);
+            case "BOTTOM_CENTER" -> new HudPlacement(HudAnchor.CENTER, HudAnchor.END,   0, 4);
+            case "BOTTOM_RIGHT"  -> new HudPlacement(HudAnchor.END,    HudAnchor.END,   4, 4);
+            default -> null;
+        };
+        if (oldBar != null) HudLayout.migrate(InventorySearch.ELEMENT, oldBar);
         BossTracker.hiddenBossNames.clear();
         if (obj.has("bossHiddenBosses") && obj.get("bossHiddenBosses").isJsonArray()) {
             for (JsonElement el : obj.getAsJsonArray("bossHiddenBosses")) {
@@ -164,25 +229,19 @@ public final class IslesPlusConfig {
             }
         }
 
-        QteTracker.qteLuckEnabled      = getBool(obj,  "qteLuckEnabled",      true);
+        QteTracker.qteLuckEnabled      = getBool(obj,  "qteLuckEnabled",      false);
         QteTracker.qteExpEnabled       = getBool(obj,  "qteExpEnabled",       false);
-        QteTracker.qteChanceEnabled    = getBool(obj,  "qteChanceEnabled",    true);
+        QteTracker.qteChanceEnabled    = getBool(obj,  "qteChanceEnabled",    false);
         QteTracker.qteCoinsEnabled     = getBool(obj,  "qteCoinsEnabled",     false);
         QteTracker.qteTickSkipEnabled  = getBool(obj,  "qteTickSkipEnabled",  false);
         ChatFilter.chatFilterEnabled                = getBool(obj,  "chatFilterEnabled",               false);
         ChatFilter.filterManaMeteor                = getBool(obj,  "filterManaMeteor",                false);
         ChatFilter.filterGuildChat                 = getBool(obj,  "filterGuildChat",                  false);
-        ChatFilter.filterDeaths                    = getBool(obj,  "filterDeaths",                     false);
+        ChatFilter.filterDeaths                    = getBool(obj,  "filterDeaths",                     true);
         InventorySearch.inventorySearchEnabled      = getBool(obj,  "inventorySearchEnabled",           true);
-        if (obj.has("searchBarPosition")) {
-            try {
-                InventorySearch.barPosition =
-                    InventorySearch.SearchBarPosition.valueOf(obj.get("searchBarPosition").getAsString());
-            } catch (RuntimeException ignored) {}
-        }
         maxMatches                                  = getInt(obj,   "maxMatches",                       500);
 
-        NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.PING_UNTIL_INTERACT;
+        NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.OFF;
         if (obj.has("regenPingMode")) {
             try {
                 NodeAlertManager.regenPingMode =
@@ -190,6 +249,10 @@ public final class IslesPlusConfig {
             } catch (RuntimeException ignored) {}
         }
 
+        QuickActions.enabled = getBool(obj, "quickActionsEnabled", true);
+        QuickActions.showBackground = getBool(obj, "quickActionsBackground", true);
+        QuickActions.loadJson(obj.has("quickActions") && obj.get("quickActions").isJsonArray()
+            ? obj.getAsJsonArray("quickActions") : null);
         if (obj.has("lockedSlots") && obj.get("lockedSlots").isJsonArray()) {
             SlotLocker.setLockedSlots(obj.getAsJsonArray("lockedSlots"));
         }
@@ -197,7 +260,6 @@ public final class IslesPlusConfig {
         if (IslesClient.modOnlySoundsEnabled) {
             SoundController.setModOnlySoundsEnabled(true);
         }
-        rebuildModSoundsAllowlist();
     }
 
     /** Writes to a sibling temp file and moves it into place, so a crash or kill mid-write can
@@ -219,11 +281,22 @@ public final class IslesPlusConfig {
     public static void save() {
         JsonObject obj = new JsonObject();
         obj.addProperty("chatUpdatesEnabled",               IslesClient.chatUpdatesEnabled);
+        obj.addProperty("lastAnnouncementId",               Announcements.lastShownId);
+        obj.addProperty("lastAnnouncementIssued",           Announcements.lastShownIssued);
         obj.addProperty("modOnlySoundsEnabled",             IslesClient.modOnlySoundsEnabled);
         obj.addProperty("inventoryFullNotifyEnabled", InventoryNotifier.inventoryFullNotifyEnabled);
         saveSoundConfig(obj, "inventoryFull", InventoryNotifier.soundConfig);
         obj.addProperty("dropNotifyEnabled", DropNotifier.dropNotifyEnabled);
         saveSoundConfig(obj, "dropNotify", DropNotifier.soundConfig);
+        obj.addProperty("treasureChestsEnabled", TreasureChestFinder.treasureChestsEnabled);
+        obj.addProperty("foodBuffTimerEnabled", FoodBuffTimer.foodBuffTimerEnabled);
+        obj.addProperty("voidRiftMode", VoidRiftTimer.mode.name());
+        saveSoundConfig(obj, "voidRift", VoidRiftTimer.soundConfig);
+        obj.addProperty("eggTimerEnabled", EggTimer.eggTimerEnabled);
+        obj.addProperty("storageCountEnabled", StorageCount.storageCountEnabled);
+        saveSoundConfig(obj, "eggTimer", EggTimer.soundConfig);
+        obj.addProperty("berryAlertEnabled", BerryAlert.berryAlertEnabled);
+        saveSoundConfig(obj, "berryAlert", BerryAlert.soundConfig);
         obj.addProperty("depletionPingEnabled", NodeAlertManager.depletionPingEnabled);
         saveSoundConfig(obj, "depletionPing", NodeAlertManager.depletionSoundConfig);
         saveSoundConfig(obj, "regenPing", NodeAlertManager.regenSoundConfig);
@@ -231,7 +304,22 @@ public final class IslesPlusConfig {
         obj.addProperty("regenPingMode",                 NodeAlertManager.regenPingMode.name());
         obj.addProperty("plushieFinderEnabled",          PlushieFinder.plushieFinderEnabled);
         obj.addProperty("plushieMaxDistance",            PlushieFinder.maxDistance);
+        obj.addProperty("plushieHideFirst",              PlushieFinder.hideFirstPlushie);
         obj.addProperty("slotLockEnabled",               SlotLocker.slotLockEnabled);
+        obj.addProperty("harvestableHighlighterEnabled", HarvestableHighlighter.enabled);
+        obj.addProperty("harvestableWaypoints",          HarvestableHighlighter.waypoints);
+        JsonObject harvestColorsOut = new JsonObject();
+        for (HarvestableHighlighter.Harvestable h : HarvestableHighlighter.Harvestable.values()) {
+            JsonObject c = new JsonObject();
+            c.addProperty("hue", h.hue);
+            c.addProperty("saturation", h.saturation);
+            c.addProperty("lightness", h.lightness);
+            harvestColorsOut.add(h.name(), c);
+        }
+        obj.add("harvestableColors",                     harvestColorsOut);
+        JsonArray harvestHiddenArr = new JsonArray();
+        for (HarvestableHighlighter.Harvestable h : HarvestableHighlighter.hidden) harvestHiddenArr.add(h.name());
+        obj.add("harvestableHidden",                     harvestHiddenArr);
         obj.addProperty("chestFinderEnabled",            ChestFinder.chestFinderEnabled);
         obj.addProperty("chestFinderGlowHue",            ChestFinder.glowHue);
         obj.addProperty("chestFinderGlowSaturation",     ChestFinder.glowSaturation);
@@ -260,11 +348,13 @@ public final class IslesPlusConfig {
         obj.addProperty("rankShowPlayerCount",           RankCalculator.showPlayerCount);
         obj.addProperty("rankShowDropTimer",             RankCalculator.showRankDropTimer);
         obj.addProperty("harvestTimerEnabled",           HarvestTimer.harvestTimerEnabled);
+        obj.addProperty("rollPercentEnabled",            RollPercent.rollPercentEnabled);
+        obj.addProperty("itemAgeEnabled",                ItemAge.itemAgeEnabled);
         obj.addProperty("qteTrackerEnabled",    QteTracker.qteTrackerEnabled);
         obj.addProperty("groundItemsNotifierEnabled", GroundItemsNotifier.groundItemsNotifierEnabled);
         obj.addProperty("bossTrackerEnabled", BossTracker.bossTrackerEnabled);
         obj.addProperty("bossAutoOpen",        BossTracker.autoOpenBossary);
-        obj.addProperty("bossHudPosition",     BossTracker.hudPosition.name());
+        obj.add("hudLayout",                 HudLayout.toJson());
         JsonArray hiddenArr = new JsonArray();
         for (String name : BossTracker.hiddenBossNames) hiddenArr.add(name);
         obj.add("bossHiddenBosses", hiddenArr);
@@ -308,16 +398,17 @@ public final class IslesPlusConfig {
         obj.addProperty("filterGuildChat",               ChatFilter.filterGuildChat);
         obj.addProperty("filterDeaths",                  ChatFilter.filterDeaths);
         obj.addProperty("inventorySearchEnabled",        InventorySearch.inventorySearchEnabled);
-        obj.addProperty("searchBarPosition",             InventorySearch.barPosition.name());
         obj.addProperty("maxMatches",                    maxMatches);
         obj.add("lockedSlots",                           SlotLocker.getLockedSlotsJson());
+        obj.addProperty("quickActionsEnabled",           QuickActions.enabled);
+        obj.addProperty("quickActionsBackground",        QuickActions.showBackground);
+        obj.add("quickActions",                          QuickActions.toJson());
         try {
             Files.createDirectories(CONFIG_PATH.getParent());
             writeAtomically(CONFIG_PATH, GSON.toJson(obj));
         } catch (IOException e) {
             IslesLog.runtimeWarn("[Isles+] Failed to save config", e);
         }
-        rebuildModSoundsAllowlist();
     }
 
     private static JsonObject readJson(Path path) {
@@ -393,26 +484,4 @@ public final class IslesPlusConfig {
         obj.addProperty(prefix + "Pitch",   config.pitch);
     }
 
-    /**
-     * rebuilds the ModSounds allowlist from whatever sounds are set on enabled features.
-     * only these exact sound ids get through the "mod only sounds" filter
-     */
-    private static void rebuildModSoundsAllowlist() {
-        ArrayList<String> ids = new ArrayList<>();
-        if (InventoryNotifier.inventoryFullNotifyEnabled)
-            ids.add(InventoryNotifier.soundConfig.soundId);
-        if (DropNotifier.dropNotifyEnabled)
-            ids.add(DropNotifier.soundConfig.soundId);
-        if (NodeAlertManager.depletionPingEnabled)
-            ids.add(NodeAlertManager.depletionSoundConfig.soundId);
-        if (NodeAlertManager.regenPingMode != NodeAlertManager.RegenPingMode.OFF)
-            ids.add(NodeAlertManager.regenSoundConfig.soundId);
-        if (GroundItemsNotifier.groundItemsNotifierEnabled) {
-            for (GroundItemsNotifier.WatchedItem item : GroundItemsNotifier.watchedItems) {
-                if (item.enabled && item.soundPing)
-                    ids.add(item.soundConfig.soundId);
-            }
-        }
-        ModSounds.rebuildActiveSounds(ids);
-    }
 }

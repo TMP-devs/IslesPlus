@@ -55,7 +55,7 @@ public class TextDisplayEntityRendererMixin {
         if (state.data == null) return;   // a label with no data yet: nothing to restyle
 
         // Build the new time line
-        // Bold Silkscreen in the timer colour, with a drop shadow in a darker shade of that colour.
+        // Bold body text in the timer colour, with a drop shadow in a darker shade of that colour.
         int rgb = HarvestTimer.getTimeColor();
         int shadow = 0xFF000000 | com.islesplus.ui.ColorMath.darken(rgb, SHADOW_BRIGHTNESS);
         Text timeText = com.islesplus.ui.Fonts.ofEstimate(timeStr)

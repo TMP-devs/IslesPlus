@@ -2,6 +2,7 @@ package com.islesplus.features.harvesttimer;
 
 import com.islesplus.features.nodealertmanager.NodeTracker;
 import com.islesplus.entity.TrackedNode;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.util.Util;
 
 import java.util.UUID;
@@ -42,7 +43,7 @@ public final class HarvestTimer {
     }
 
     public static void onMessage(String text) {
-        if (!harvestTimerEnabled) return;
+        if (!harvestTimerEnabled || FeatureFlags.isKilled("harvest_timer")) return;
         Matcher m = GATHERING_INTERVAL_PATTERN.matcher(text);
         if (!m.find()) return;
         try {

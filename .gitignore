@@ -41,14 +41,13 @@ replay_*.log
 *.hprof
 *.jfr
 
-# claude
-.claude/
+# local tooling
 .worktrees/
-
-# docs
-docs/plans/
-tmpclaude-*
+docs/
 
 # wrangler local state (account ids, caches)
 .wrangler/
 node_modules/
+
+# minecraft run logs
+logs/

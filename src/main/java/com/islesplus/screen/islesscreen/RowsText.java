@@ -11,6 +11,18 @@ final class RowsText {
 
     private RowsText() {}
 
+    /** Whether a card matches the /ip search: every word of {@code query} appears somewhere in its
+     * title or description (any case, any order). A blank query matches everything. */
+    static boolean matchesSearch(String title, String description, String query) {
+        if (query == null || query.isBlank()) return true;
+        String hay = ((title == null ? "" : title) + " " + (description == null ? "" : description))
+            .toLowerCase(java.util.Locale.ROOT);
+        for (String word : query.toLowerCase(java.util.Locale.ROOT).trim().split("\\s+")) {
+            if (!hay.contains(word)) return false;
+        }
+        return true;
+    }
+
     /** Footnote under the chat-filter tiles, pluralised: "Nothing hidden." / "Hiding 1 type." */
     static String chatFilterSummary(int hidden) {
         if (hidden == 0) return "Nothing hidden.";

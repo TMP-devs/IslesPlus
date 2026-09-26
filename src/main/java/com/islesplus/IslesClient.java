@@ -3,9 +3,15 @@ package com.islesplus;
 import com.islesplus.IslesPlusConfig;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.entity.EntityScanner;
+import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.chestfinder.ChestFinder;
+import com.islesplus.features.foodbuff.FoodBuffTimer;
+import com.islesplus.features.voidrift.VoidRiftTimer;
+import com.islesplus.features.eggtimer.EggTimer;
+import com.islesplus.features.treasurechest.TreasureChestFinder;
 import com.islesplus.features.voidcrystalfinder.VoidCrystalFinder;
 import com.islesplus.features.inventorysearch.InventorySearch;
+import com.islesplus.features.quickactions.QuickActions;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.inventorynotifier.InventoryNotifier;
 import com.islesplus.features.mobfinder.MobFinder;
@@ -18,12 +24,9 @@ import com.islesplus.features.playerfinder.PlayerFinder;
 import com.islesplus.features.plushiefinder.PlushieFinder;
 import com.islesplus.features.nodealertmanager.NodeRepository;
 import com.islesplus.features.rankcalculator.RankCalculator;
-import com.islesplus.features.rankcalculator.RankHudRenderer;
 import com.islesplus.features.rankcalculator.RiftRepository;
 import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
 import com.islesplus.features.grounditemsnotifier.GroundItemsRenderer;
-import com.islesplus.features.grounditemsnotifier.GroundItemsHudRenderer;
-import com.islesplus.features.qtetracker.QteHudRenderer;
 import com.islesplus.features.qtetracker.QteTracker;
 import com.islesplus.features.qtetracker.QteRenderer;
 import com.islesplus.features.secretfinder.SecretBlockRenderer;
@@ -33,11 +36,11 @@ import com.islesplus.features.waystonefinder.WaystoneFinder;
 import com.islesplus.features.waystonefinder.WaystoneTagRenderer;
 import com.islesplus.features.plushiefinder.PlushieMenuHook;
 import com.islesplus.features.plushiefinder.PlushieRepository;
-import com.islesplus.features.plushiefinder.PlushieStatusHudRenderer;
 import com.islesplus.features.plushiefinder.PlushieWaypointRenderer;
 import com.islesplus.features.bosstracker.BossaryHook;
 import com.islesplus.features.autoparty.AutoParty;
-import com.islesplus.features.bosstracker.BossTimerHud;
+import com.islesplus.features.rollpercent.ItemAge;
+import com.islesplus.features.rollpercent.RollPercent;
 import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.resourcevault.ResourceVaultOpener;
 import com.islesplus.features.slotlocker.SlotLocker;
@@ -45,8 +48,14 @@ import com.islesplus.features.superjump.SuperJump;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.mixin.HandledScreenAccessor;
 import com.islesplus.screen.islesscreen.IslesScreen;
+import com.islesplus.hud.HudLayout;
+import com.islesplus.features.harvestables.HarvestableHighlighter;
+import com.islesplus.screen.hudedit.HudEditScreen;
 import com.islesplus.sound.SoundController;
 import com.islesplus.sound.ModSounds;
+import com.islesplus.sync.Announcement;
+import com.islesplus.sync.AnnouncementFeed;
+import com.islesplus.sync.Announcements;
 import com.islesplus.sync.FeatureFlags;
 import com.islesplus.ui.Fonts;
 import com.islesplus.ui.Theme;
@@ -143,6 +152,13 @@ public class IslesClient implements ClientModInitializer {
         GLFW.GLFW_KEY_UNKNOWN,
         KEYBIND_CATEGORY_ISLESPLUS
     ));
+    /** Opens /bossary (which also refreshes the Boss Timers). */
+    public static final KeyBinding BOSSARY_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
+        "key.islesplus.bossary",
+        InputUtil.Type.KEYSYM,
+        GLFW.GLFW_KEY_UNKNOWN,
+        KEYBIND_CATEGORY_ISLESPLUS
+    ));
     public static final KeyBinding SUPER_JUMP_KEY = KeyBindingHelper.registerKeyBinding(new KeyBinding(
         "key.islesplus.super_jump",
         InputUtil.Type.KEYSYM,
@@ -167,6 +183,7 @@ public class IslesClient implements ClientModInitializer {
         // has to go before the main BEFORE_INIT block so its allowKeyPress
         // runs first and can eat character keys while the search bar is focused
         InventorySearch.register();
+        QuickActions.register();
 
         ScreenEvents.BEFORE_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
             if (!(screen instanceof HandledScreen<?> handledScreen)) return;
@@ -246,6 +263,7 @@ public class IslesClient implements ClientModInitializer {
             HarvestTimer.onMessage(text);
             BossTracker.onChatMessage(text);
             RankCalculator.onChatMessage(text);
+            EggTimer.onMessage(text);
         });
 
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) -> {
@@ -276,6 +294,13 @@ public class IslesClient implements ClientModInitializer {
                         client2.execute(() -> client2.setScreen(new IslesScreen()));
                         return 1;
                     })
+                    .then(ClientCommandManager.literal("hud")
+                        .executes(context -> {
+                            MinecraftClient client2 = MinecraftClient.getInstance();
+                            client2.execute(() -> client2.setScreen(new HudEditScreen(null)));
+                            return 1;
+                        })
+                    )
                     .then(ClientCommandManager.literal("party")
                         .executes(context -> {
                             MinecraftClient client2 = MinecraftClient.getInstance();
@@ -308,30 +333,34 @@ public class IslesClient implements ClientModInitializer {
         });
         WorldRenderEvents.AFTER_ENTITIES.register(PlushieWaypointRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(WaystoneTagRenderer::render);
+        WorldRenderEvents.AFTER_ENTITIES.register(com.islesplus.features.harvestables.HarvestableWaypointRenderer::render);
+        WorldRenderEvents.AFTER_ENTITIES.register(TreasureChestFinder::render);
         WorldRenderEvents.AFTER_ENTITIES.register(SecretBlockRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(QteRenderer::render);
         WorldRenderEvents.AFTER_ENTITIES.register(GroundItemsRenderer::render);
-        HudRenderCallback.EVENT.register((context, tickDelta) -> {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            RankHudRenderer.render(context, mc);
-            InventoryNotifier.renderHud(context, mc);
-            PlushieStatusHudRenderer.render(context, mc);
-            QteHudRenderer.render(context, mc);
-            GroundItemsHudRenderer.render(context, mc);
-            BossTimerHud.render(context, mc);
-        });
+        HudRenderCallback.EVENT.register((context, tickDelta) ->
+            HudLayout.renderHud(context, MinecraftClient.getInstance()));
+        RollPercent.loadCache();
+        net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientLifecycleEvents.CLIENT_STOPPING.register(c -> RollPercent.saveCache());
+        RollPercent.register();
+        ItemAge.register();   // after the rolls: the age goes below everything else
     }
 
     private void onClientTick(MinecraftClient client) {
+        QuickActions.tick(client);
         while (CONFIRM_INVENTORY_FULL_KEY.wasPressed()) { InventoryNotifier.confirm(); }
         while (BACKPACK_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("bp"); }
         while (TRASH_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("trash"); }
         while (COSMETICS_HALL_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("cosmeticshall"); }
+        while (BOSSARY_KEY.wasPressed()) { if (client.player != null) client.player.networkHandler.sendChatCommand("bossary"); }
         while (RESOURCE_VAULT_KEY.wasPressed()) { ResourceVaultOpener.activate(); }
         while (AUTO_PARTY_KEY.wasPressed()) { if (AutoParty.enabled) AutoParty.trigger(client); }
         while (PARTY_WARP_KEY.wasPressed()) { if (AutoParty.enabled && client.player != null) client.player.networkHandler.sendChatCommand("p warp"); }
         while (SUPER_JUMP_KEY.wasPressed()) { }   // drained: super jump acts on the raw key event (KeyBindingMixin)
         SuperJump.tick(client);
+        // above the scan on purpose: a scan failure returns early, and an announcement is how we
+        // tell people something is wrong
+        guardedTick("announcement",              () -> showPendingAnnouncement(client));
         EntityScanResult scan;
         try {
             scan = EntityScanner.scan(client);
@@ -349,10 +378,16 @@ public class IslesClient implements ClientModInitializer {
         guardedTick("world_identification",      () -> WorldIdentification.tick(client));
         if (!FeatureFlags.isKilled("vending_machine_finder")) guardedTick("vending_machine_finder", () -> VendingMachineFinder.tick(client, scan));
         if (!FeatureFlags.isKilled("waystone_finder"))     guardedTick("waystone_finder",     () -> WaystoneFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("treasure_chests"))     guardedTick("treasure_chests",     () -> TreasureChestFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled("food_buff_timer"))     guardedTick("food_buff_timer",     () -> FoodBuffTimer.tick(client));
+        if (!FeatureFlags.isKilled("void_rift_timer"))     guardedTick("void_rift_timer",     () -> VoidRiftTimer.tick(client));
+        if (!FeatureFlags.isKilled("egg_timer"))           guardedTick("egg_timer",           () -> EggTimer.tick(client));
         if (!FeatureFlags.isKilled("chest_finder"))        guardedTick("chest_finder",        () -> ChestFinder.tick(client, scan));
+        if (!FeatureFlags.isKilled(HarvestableHighlighter.KILL_KEY)) guardedTick("harvestable_highlighter", () -> HarvestableHighlighter.tick(client, scan));
         guardedTick("void_crystal_finder",       () -> VoidCrystalFinder.tick(client, scan));
         if (!FeatureFlags.isKilled("button_finder"))       guardedTick("button_finder",       () -> SecretFinder.tick(client, scan));
         if (!FeatureFlags.isKilled("qte_tracker"))         guardedTick("qte_tracker",         () -> QteTracker.tick(client, scan));
+        if (!FeatureFlags.isKilled("berry_alert"))         guardedTick("berry_alert",         () -> BerryAlert.tick(client, scan));
         if (!FeatureFlags.isKilled("mob_finder"))          guardedTick("mob_finder",          () -> MobFinder.tick(client, scan));
         if (!FeatureFlags.isKilled("player_finder"))       guardedTick("player_finder",       () -> PlayerFinder.tick(client, scan));
         if (!FeatureFlags.isKilled("rank_calculator"))     guardedTick("rank_calculator",     () -> RankCalculator.tick(client, scan));
@@ -392,12 +427,12 @@ public class IslesClient implements ClientModInitializer {
         chatUpdatesEnabled = enabled;
     }
 
-    public static boolean shouldMuteIncomingSound(String soundId) {
-        return SoundController.shouldMuteIncomingSound(soundId);
+    public static boolean shouldMuteIncomingSound() {
+        return SoundController.shouldMuteIncomingSound();
     }
 
-    public static boolean shouldAllowLocalSoundInFocus(String soundId) {
-        return SoundController.shouldAllowLocalSound(soundId);
+    public static boolean shouldAllowLocalSoundInFocus(boolean uiCategory) {
+        return SoundController.shouldAllowLocalSound(uiCategory);
     }
 
     public static void sendStatusMessage(MinecraftClient client, String message) {
@@ -433,12 +468,30 @@ public class IslesClient implements ClientModInitializer {
             String current = FabricLoader.getInstance().getModContainer("islesplus")
                 .map(c -> c.getMetadata().getVersion().getFriendlyString())
                 .orElse("");
-            if (!current.isEmpty() && !current.equals(latest)) {
+            // only when the published version is really newer: a newer or test build must not be told to "update"
+            if (com.islesplus.sync.VersionGate.isNewer(latest, current)) {
                 String rawUrl = FeatureFlags.getLatestVersionUrl();
                 String url = rawUrl.isEmpty() ? "https://modrinth.com/project/isles+" : rawUrl;
                 sendLine(client, CHAT_BRAND, "Update available: " + latest, url, "");
             }
         }
+    }
+
+    /**
+     * The /announce message, in chat the moment we pull a new one. Shows once per id: cheap enough
+     * to ask every tick, since the usual answer is "nothing new". Nothing shows while
+     * "announcements" is disabled or killed in features_v2.json.
+     */
+    public static void showPendingAnnouncement(MinecraftClient client) {
+        if (client.player == null || FeatureFlags.isKilled(AnnouncementFeed.FLAG)) return;
+        Announcement announcement = Announcements.pending();
+        if (announcement == null) return;
+
+        sendLine(client, parseColor(announcement.color(), CHAT_BRAND),
+            announcement.text(), announcement.link(), announcement.linkText());
+        ModSounds.play(client, ModSounds.Cue.ANNOUNCEMENT);
+        Announcements.markShown(announcement);
+        IslesPlusConfig.save();
     }
 
     private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
@@ -465,7 +518,7 @@ public class IslesClient implements ClientModInitializer {
         }
     }
 
-    /** "ISLES+" wordmark in Silkscreen: lifted oxblood with a tan plus (MOTD mockup). */
+    /** "Isles+" wordmark: lifted oxblood with a tan plus (MOTD mockup). */
     private static MutableText buildIslesPrefix() {
         return Text.empty()
             .append(Fonts.of("Isles").copy().styled(s -> s.withColor(TextColor.fromRgb(CHAT_BRAND))))
@@ -474,7 +527,7 @@ public class IslesClient implements ClientModInitializer {
 
     /**
      * One Isles+ chat line, as in the MOTD mockup: wordmark, a diamond mark, then the message, all
-     * in Silkscreen. With a link it ends "-> CLICK HERE": an arrow glyph and underlined link text
+     * in the body face. With a link it ends "-> CLICK HERE": an arrow glyph and underlined link text
      * that opens the URL.
      */
     private static void sendLine(MinecraftClient client, int textColor, String message, String link, String linkText) {
@@ -534,6 +587,7 @@ public class IslesClient implements ClientModInitializer {
     // -------------------------------------------------------------------------
 
     private static void resetRuntimeState() {
+        HarvestableHighlighter.reset();
         NodeTracker.reset();
         HarvestTimer.reset();
         NerdModeActivator.reset();
@@ -542,8 +596,13 @@ public class IslesClient implements ClientModInitializer {
         NodeAlertManager.reset();
         DropNotifier.reset();
         InventoryNotifier.reset();
+        BerryAlert.reset();
         VendingMachineFinder.reset();
         WaystoneFinder.reset();
+        TreasureChestFinder.reset();
+        FoodBuffTimer.reset();
+        VoidRiftTimer.reset();
+        EggTimer.reset();
         ChestFinder.reset();
         VoidCrystalFinder.reset();
         SecretFinder.reset();
@@ -558,7 +617,9 @@ public class IslesClient implements ClientModInitializer {
         RankCalculator.reset();
         GroundItemsNotifier.reset();
         BossTracker.reset();
+        RollPercent.saveCache();   // join / disconnect: a quiet moment to write any newly learned rolls
         SuperJump.reset();
+        QuickActions.reset();
     }
 
 }

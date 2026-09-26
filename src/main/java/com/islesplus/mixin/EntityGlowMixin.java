@@ -1,7 +1,9 @@
 package com.islesplus.mixin;
 
+import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.chestfinder.ChestFinder;
 import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
+import com.islesplus.features.harvestables.HarvestableHighlighter;
 import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.playerfinder.PlayerFinder;
 import com.islesplus.features.secretfinder.SecretFinder;
@@ -19,7 +21,7 @@ public class EntityGlowMixin {
     @Inject(method = "isGlowing", at = @At("HEAD"), cancellable = true)
     private void islesplus$forceFinderGlow(CallbackInfoReturnable<Boolean> cir) {
         Entity self = (Entity) (Object) this;
-        if (ChestFinder.shouldForceGlow(self) || VendingMachineFinder.shouldForceGlow(self) || WaystoneFinder.shouldForceGlow(self) || SecretFinder.shouldForceGlow(self) || MobFinder.shouldForceGlow(self) || PlayerFinder.shouldForceGlow(self) || GroundItemsNotifier.shouldForceGlow(self)) {
+        if (BerryAlert.shouldForceGlow(self) || ChestFinder.shouldForceGlow(self) || VendingMachineFinder.shouldForceGlow(self) || WaystoneFinder.shouldForceGlow(self) || SecretFinder.shouldForceGlow(self) || MobFinder.shouldForceGlow(self) || PlayerFinder.shouldForceGlow(self) || GroundItemsNotifier.shouldForceGlow(self) || HarvestableHighlighter.shouldForceGlow(self)) {
             cir.setReturnValue(true);
         }
     }
@@ -49,6 +51,10 @@ public class EntityGlowMixin {
         }
         if (PlayerFinder.shouldForceGlow(self)) {
             cir.setReturnValue(PlayerFinder.glowRgb());
+            return;
+        }
+        if (HarvestableHighlighter.shouldForceGlow(self)) {
+            cir.setReturnValue(HarvestableHighlighter.glowRgb(self));
             return;
         }
         if (GroundItemsNotifier.shouldForceGlow(self)) {

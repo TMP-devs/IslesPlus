@@ -20,7 +20,7 @@ import java.util.function.Consumer;
 /**
  * Title-screen button from the "Join Isles Button" mockup (drawn at 2x there, so halved here).
  * JOIN is the oxblood button with a gold diamond either side of cream text; STONE is the grey
- * bevel the mockup gives the vanilla buttons, with Silkscreen text. A widget of its own because
+ * bevel the mockup gives the vanilla buttons, with Isles+ text. A widget of its own because
  * vanilla buttons cannot be re-skinned (their drawing is final); it behaves like one - click,
  * Enter or Space, tab focus, narration.
  */
@@ -86,11 +86,11 @@ public class IslesMenuButton extends ClickableWidget {
         ctx.fill(x, y + h - 1, x + w, y + h, bottom);
 
         String label = getMessage().getString();
-        // Silkscreen only has Latin letters. A label in any other script (the vanilla buttons are
+        // The Isles+ faces cover Latin letters only. A label in any other script (the vanilla buttons are
         // translated) is drawn in the game's own font, which has them, rather than as empty boxes.
         boolean latin = label.chars().allMatch(c -> c <= 0xFF);
         var vanilla = MinecraftClient.getInstance().textRenderer;
-        int textW = latin ? Fonts.width(label) : vanilla.getWidth(label), textH = Fonts.GLYPH_H;
+        int textW = latin ? Fonts.controlWidth(label, Fonts.BODY) : vanilla.getWidth(label), textH = Fonts.GLYPH_H;
         int contentW = textW + (look == Look.JOIN ? 2 * (DIAMOND + DIAMOND_GAP) : 0);
         int cx = x + (w - contentW) / 2, cy = y + h / 2;
         if (look == Look.JOIN) {
@@ -99,8 +99,8 @@ public class IslesMenuButton extends ClickableWidget {
         }
         int shadow = look == Look.JOIN ? TEXT_SHADOW : 0xFF2A2A2A;
         if (latin) {
-            Fonts.draw(ctx, label, cx + 1, cy - textH / 2 + 1, shadow);
-            Fonts.draw(ctx, label, cx, cy - textH / 2, text);
+            Fonts.drawControl(ctx, label, cx + 1, cy - textH / 2 + 1, shadow, Fonts.BODY);
+            Fonts.drawControl(ctx, label, cx, cy - textH / 2, text, Fonts.BODY);
         } else {
             ctx.drawText(vanilla, label, cx + 1, cy - textH / 2 + 1, shadow, false);
             ctx.drawText(vanilla, label, cx, cy - textH / 2, text, false);

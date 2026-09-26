@@ -5,6 +5,7 @@ import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.ui.GlowColor;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.util.math.BlockPos;
@@ -80,6 +81,7 @@ public final class SecretFinder {
     }
 
     public static boolean shouldForceGlow(Entity entity) {
-        return secretFinderEnabled && entity != null && glowingEntityIds.contains(entity.getId());
+        // the remote check matters: a killed finder's tick stops, so its set keeps the last entities
+        return secretFinderEnabled && !FeatureFlags.isKilled("button_finder") && entity != null && glowingEntityIds.contains(entity.getId());
     }
 }

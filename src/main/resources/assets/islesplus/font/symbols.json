@@ -1,3 +1,0 @@
-{ "providers": [
-  { "type": "bitmap", "file": "islesplus:font/symbols.png", "height": 7, "ascent": 5, "chars": ["◆→"] }
-] }

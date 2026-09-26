@@ -16,6 +16,8 @@ public final class TrackedNode {
     public double nodeX;
     public double nodeY;
     public double nodeZ;
+    /** Last label text seen on this node (normalized), to log only when it changes. */
+    public String lastLabel = "";
 
     public void resetFor(NodeSnapshot snapshot, long now) {
         textDisplayUuid = snapshot.uuid;
@@ -31,5 +33,6 @@ public final class TrackedNode {
         nodeX = snapshot.entityX;
         nodeY = snapshot.entityY;
         nodeZ = snapshot.entityZ;
+        lastLabel = snapshot.normalizedText;
     }
 }

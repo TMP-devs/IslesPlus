@@ -15,8 +15,6 @@ public final class BossTracker {
 
     public static boolean bossTrackerEnabled = false;
 
-    public enum BossHudPosition { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
-    public static BossHudPosition hudPosition = BossHudPosition.TOP_LEFT;
     public static boolean autoOpenBossary = false;
     public static final java.util.Set<String> hiddenBossNames = new java.util.HashSet<>();
 

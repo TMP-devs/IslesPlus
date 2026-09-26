@@ -8,10 +8,12 @@ import com.islesplus.ui.Theme;
 import com.islesplus.ui.Widget;
 import net.minecraft.client.gui.DrawContext;
 
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /** Bevelled push button in one of four kinds; centred label, optional leading "+ " glyph,
- * optional fixed-fill width, and a static or dynamic (re-measured each layout) label. */
+ * optional fixed-fill width, a static or dynamic (re-measured each layout) label, and an optional
+ * disabled state (greyed, ignores clicks - for an action that is on cooldown or unavailable). */
 public class Button extends Widget {
 
     public enum Kind { PRIMARY, SECONDARY, QUIET, ICON }
@@ -23,6 +25,7 @@ public class Button extends Widget {
     private boolean fill = false;
     private boolean plus = false;
     private boolean pressed = false;
+    private BooleanSupplier disabled;
 
     public Button(String label, Kind kind, Runnable onClick) {
         this.label = () -> label;
@@ -34,6 +37,10 @@ public class Button extends Widget {
     public Button fill() { this.fill = true; return this; }
     public Button plus() { this.plus = true; return this; }
     public Button label(Supplier<String> label) { this.label = label; return this; }
+    /** While the supplier is true the button is greyed out and ignores clicks. */
+    public Button disabledWhen(BooleanSupplier disabled) { this.disabled = disabled; return this; }
+
+    private boolean isDisabled() { return disabled != null && disabled.getAsBoolean(); }
 
     private String displayText() {
         String s = label.get();
@@ -43,7 +50,7 @@ public class Button extends Widget {
     @Override public int prefWidth() {
         if (kind == Kind.ICON) return Metrics.ICON_BUTTON;
         if (fill) return Integer.MAX_VALUE;
-        return Fonts.width(displayText()) + 2 * Metrics.BUTTON_PAD_X;
+        return Fonts.controlWidth(displayText(), Fonts.BODY) + 2 * Metrics.BUTTON_PAD_X;
     }
 
     @Override public int layout(int x, int y, int width) {
@@ -59,8 +66,15 @@ public class Button extends Widget {
     }
 
     @Override public void render(DrawContext ctx, int mouseX, int mouseY) {
-        boolean hover = contains(mouseX, mouseY);
+        boolean hover = contains(mouseX, mouseY) && !isDisabled();
         int fillC, litC, shadeC, ringC, textC;
+        if (isDisabled()) {
+            fillC = Theme.DISABLED; litC = Theme.DISABLED_LIT; shadeC = Theme.DISABLED_SHADE;
+            ringC = Theme.DISABLED_RING; textC = Theme.DISABLED_TEXT;
+            pressed = false;
+            drawFace(ctx, fillC, litC, shadeC, ringC, textC);
+            return;
+        }
         switch (kind) {
             case PRIMARY -> {
                 fillC = hover ? Theme.OXBLOOD_HOVER : Theme.OXBLOOD;
@@ -88,6 +102,10 @@ public class Button extends Widget {
         if (pressed && !Draw.leftMouseDown()) pressed = false;
         if (pressed) litC = shadeC;
 
+        drawFace(ctx, fillC, litC, shadeC, ringC, textC);
+    }
+
+    private void drawFace(DrawContext ctx, int fillC, int litC, int shadeC, int ringC, int textC) {
         Draw.bevel(ctx, x, y, w, h, fillC, litC, shadeC, ringC);
 
         if (kind == Kind.ICON) {
@@ -95,12 +113,13 @@ public class Button extends Widget {
         } else {
             String s = displayText();
             int textH = Fonts.height(Fonts.BODY);
-            Fonts.drawCentered(ctx, s, x + w / 2, y + (h - textH) / 2, textC, Fonts.BODY);
+            Fonts.drawControlCentered(ctx, s, x + w / 2, y + (h - textH) / 2, textC, Fonts.BODY);
         }
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {
         if (button != 0 || !visible || !contains(mx, my)) return false;
+        if (isDisabled()) return true;   // swallow the click, change nothing
         pressed = true;
         IslesClient.playMenuClickSound();
         onClick.run();

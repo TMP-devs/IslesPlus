@@ -1,6 +1,8 @@
 package com.islesplus.mixin;
 
+import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.chestfinder.ChestFinder;
+import com.islesplus.features.harvestables.HarvestableHighlighter;
 import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
@@ -22,6 +24,10 @@ public class DisplayEntityGlowMixin {
     @Inject(method = "getTeamColorValue", at = @At("HEAD"), cancellable = true)
     private void islesplus$forceDisplayGlowColor(CallbackInfoReturnable<Integer> cir) {
         Entity self = (Entity) (Object) this;
+        if (BerryAlert.shouldForceGlow(self)) {
+            cir.setReturnValue(BerryAlert.glowRgb());
+            return;
+        }
         if (SecretFinder.shouldForceGlow(self)) {
             cir.setReturnValue(SecretFinder.glowRgb());
             return;
@@ -40,6 +46,10 @@ public class DisplayEntityGlowMixin {
         }
         if (MobFinder.shouldForceGlow(self)) {
             cir.setReturnValue(MobFinder.glowRgb());
+            return;
+        }
+        if (HarvestableHighlighter.shouldForceGlow(self)) {
+            cir.setReturnValue(HarvestableHighlighter.glowRgb(self));
         }
     }
 }

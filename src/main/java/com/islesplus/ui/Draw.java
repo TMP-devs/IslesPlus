@@ -115,4 +115,10 @@ public final class Draw {
         c.fill(x + 4, y, x + 5, y + 5, colour);
         for (int i = 0; i < 3; i++) c.fill(x + 5 + i, y + 5 + i, x + 6 + i, y + 6 + i, colour);
     }
+
+    /** 7 x 7 plus, 1 px strokes, centred on (cx, cy): "empty, click to add". */
+    public static void plus(DrawContext ctx, int cx, int cy, int argb) {
+        ctx.fill(cx - 3, cy, cx + 4, cy + 1, argb);
+        ctx.fill(cx, cy - 3, cx + 1, cy + 4, argb);
+    }
 }

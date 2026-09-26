@@ -2,7 +2,6 @@ package com.islesplus.screen.islesscreen.rows;
 
 import com.islesplus.IslesPlusConfig;
 import com.islesplus.features.bosstracker.BossTracker;
-import com.islesplus.features.bosstracker.BossTracker.BossHudPosition;
 import com.islesplus.features.bosstracker.BossTracker.TrackedBoss;
 import com.islesplus.screen.islesscreen.FeatureRow;
 import com.islesplus.ui.Flow;
@@ -11,10 +10,8 @@ import com.islesplus.ui.Metrics;
 import com.islesplus.ui.OverlayHost;
 import com.islesplus.ui.Theme;
 import com.islesplus.ui.Widget;
-import com.islesplus.ui.widgets.AnchorGrid;
 import com.islesplus.ui.widgets.Button;
 import com.islesplus.ui.widgets.FootnoteBox;
-import com.islesplus.ui.widgets.InfoChip;
 import com.islesplus.ui.widgets.Label;
 import com.islesplus.ui.widgets.Panel;
 import com.islesplus.ui.widgets.CheckTile;
@@ -27,14 +24,14 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Boss Timers row: a toggle plus a drawer holding the auto-/bossary toggle, HUD anchor picker,
+ * Boss Timers row: a toggle plus a drawer holding the auto-/bossary toggle,
  * a "run /bossary" prompt shown only while no bosses are loaded, and a dynamic list of
  * per-{@link TrackedBoss} visibility toggles.
  *
  * <p>The boss toggle list is rebuilt from scratch (in {@link DrawerBody#layout}) whenever the
  * model's {@code BossTracker.bosses} names have structurally changed since the last build
  * (different size, or any name at the same index no longer equal). {@code BossTracker.bosses}
- * is only ever mutated from the game thread, same as rendering, so no locking is needed — but
+ * is only ever mutated from the game thread, same as rendering, so no locking is needed, but
  * it can still change between frames while this screen is open. A rebuild discards the whole
  * previous toggle subtree; since none of these toggles hold focus, nothing is lost.
  */
@@ -57,7 +54,7 @@ public final class BossTimersRow {
             .drawer(new DrawerBody(host));
     }
 
-    /** Drawer body: static auto-/bossary toggle + anchor picker, a "not loaded yet" panel whose
+    /** Drawer body: static auto-/bossary toggle, a "not loaded yet" panel whose
      * visibility is synced every layout, and a per-boss toggle list rebuilt when the boss
      * names change. */
     private static final class DrawerBody extends Widget {
@@ -73,30 +70,19 @@ public final class BossTimersRow {
             SmallToggle autoBossary = new SmallToggle("Auto /bossary on join",
                 () -> BossTracker.autoOpenBossary,
                 () -> { BossTracker.autoOpenBossary = !BossTracker.autoOpenBossary; IslesPlusConfig.save(); })
-                .badge("BETA");
-
-            AnchorGrid grid = new AnchorGrid(2,
-                new String[]{"TOP LEFT", "TOP RIGHT", "BOTTOM LEFT", "BOTTOM RIGHT"},
-                () -> BossTracker.hudPosition.ordinal(),
-                i -> {
-                    BossTracker.hudPosition = BossHudPosition.values()[i];
-                    IslesPlusConfig.save();
-                });
+                .badge("Beta");
 
             notLoadedPanel = new Panel(
                 new Flow.WrapRow(ROW_GAP, ROW_GAP)
-                    .add(new Label("Open /bossary to load bosses", Theme.INK_DEEP, Fonts.BODY).wrap())
-                    .add(new Button("RUN /BOSSARY", Button.Kind.PRIMARY, this::runBossary).small()),
+                    .add(new Label("Open /bossary to load bosses", Theme.TEXT_STRONG, Fonts.BODY).wrap())
+                    .add(new Button("Run /bossary", Button.Kind.PRIMARY, this::runBossary).small()),
                 5, Theme.RAISED, Theme.RAISED_LIT, Theme.RAISED_SHADE, Theme.SURFACE_RING);
 
+            // Where the panel sits is set with EDIT HUD, like everything else on screen.
             column.add(autoBossary)
-                .add(new Flow.WrapRow(ROW_GAP, ROW_GAP)
-                    .add(new Label("ANCHOR", Theme.TEXT_LABEL, Fonts.BODY))
-                    .add(new InfoChip(grid::selectedLabel)))
-                .add(grid)
                 .add(notLoadedPanel)
                 .add(bossColumn)
-                .add(new FootnoteBox("~ estimated timer", "/bossary to refresh, or proximity to boss"));
+                .add(new FootnoteBox("(stale) = estimated timer", "/bossary to refresh, or proximity to boss"));
         }
 
         private void runBossary() {

@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_21",
 	"mixins": [],
 	"client": [
+		"BossBarHudAccessor",
 		"ChatHudMixin",
 		"ClickableWidgetAccessor",
 		"ClientPlayNetworkHandlerMixin",
@@ -13,6 +14,8 @@
 		"HandledScreenAccessor",
 		"HandledScreenMixin",
 		"InGameHudScoreboardMixin",
+		"InventoryScreenMixin",
+		"KeyBindingAccessor",
 		"KeyBindingMixin",
 		"PlayerListHudAccessor",
 		"SoundSystemMixin",

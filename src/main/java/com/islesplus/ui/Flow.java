@@ -12,7 +12,7 @@ public final class Flow {
      * click/drag/scroll/key/char (reverse order, stop at first true); all children for
      * mouseReleased/unfocus.
      * <p>mouseClicked commits before it applies: a pre-pass first calls unfocus() on every
-     * child whose bounds do NOT contain the click point (visible or not — such a child cannot
+     * child whose bounds do NOT contain the click point (visible or not, such a child cannot
      * be the click's target), before the click is forwarded to whichever child does contain
      * it. This matters when a focused field (e.g. a HexField) sits beside a live control
      * bound to the same value (e.g. a HueRail): without committing the field first, forwarding
@@ -24,11 +24,11 @@ public final class Flow {
      * <p>The post-consume sweep (every OTHER child sent unfocus() once one consumes the click)
      * is kept alongside the pre-pass: it additionally catches an overlapping sibling that DOES
      * contain the point but isn't the one that consumed the click. Both sweeps are safe to
-     * call more than once — a well-behaved unfocus() is idempotent.
+     * call more than once, a well-behaved unfocus() is idempotent.
      * <p>BOTH sweeps are left-click only. A non-left click is still forwarded to the children
      * (that is the only way a listening {@link com.islesplus.ui.widgets.KeyChip} can bind a
-     * mouse button), but it must not commit a focused field, and must not unfocus — and so
-     * cancel — the very chip that is waiting for it. Every widget other than KeyChip ignores
+     * mouse button), but it must not commit a focused field, and must not unfocus, and so
+     * cancel, the very chip that is waiting for it. Every widget other than KeyChip ignores
      * non-left buttons outright. */
     private static abstract class Container extends Widget {
         final List<Widget> children = new ArrayList<>();

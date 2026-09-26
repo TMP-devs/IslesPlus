@@ -23,6 +23,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class RiftRepository {
+    /** one client for every fetch: a new one each time would each keep a thread until GC */
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private static final String URL = "https://tmp-devs.github.io/islesplusjson/rifts.json";
     private static final Path DATA_DIR = FabricLoader.getInstance().getConfigDir().resolve("islesplus");
     private static final Path CACHE_PATH = DATA_DIR.resolve("rift_cache.json");
@@ -81,9 +83,7 @@ public final class RiftRepository {
 
     public static boolean fetchAndCache() {
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(8))
-                .build();
+            HttpClient client = HTTP;
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(URL))
                 .timeout(Duration.ofSeconds(8))

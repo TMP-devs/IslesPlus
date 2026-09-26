@@ -16,7 +16,7 @@ import java.util.function.Supplier;
  * <p>The strip is a genuine preview of what each lightness would produce, so it takes the live
  * saturation rather than assuming 1: after a grey hex is typed (which zeroes saturation) the
  * rail correctly shows a black-to-white ramp instead of a colour ramp the value cannot reach.
- * {@link HueRail} is different — it is a hue picker, so its strip stays at saturation 1 and
+ * {@link HueRail} is different, it is a hue picker, so its strip stays at saturation 1 and
  * lightness .5 whatever the stored colour is. */
 public class BrightnessRail extends DragTrack {
     private static final int KNOB_W = 6;

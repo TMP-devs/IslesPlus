@@ -26,7 +26,6 @@ public class HexField extends TextField {
         this.draft = draft;
         this.draft[0] = ColorMath.toHex(rgb());
         this.centered = true;
-        this.mixedCase = false;
         // Escape cancels: put the draft back to the live colour first, so the unfocus() that follows
         // (which applies any valid draft) has nothing new to apply.
         onCancel(() -> draft[0] = ColorMath.toHex(rgb()));
@@ -52,7 +51,7 @@ public class HexField extends TextField {
 
     /** Idempotent: containers broadcast unfocus() to every child on any click (tab switch,
      * screen close, a sibling consuming the click), so this must be a no-op unless the field
-     * was actually focused — otherwise a broadcast unfocus after the colour changed elsewhere
+     * was actually focused, otherwise a broadcast unfocus after the colour changed elsewhere
      * (e.g. a hue/brightness rail bound to the same value) would silently revert it to the
      * stale draft. */
     @Override public void unfocus() {

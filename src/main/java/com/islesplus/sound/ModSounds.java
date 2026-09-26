@@ -1,13 +1,11 @@
 package com.islesplus.sound;
 
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.sound.PositionedSoundInstance;
 import net.minecraft.registry.Registries;
 import net.minecraft.sound.SoundEvent;
 import net.minecraft.util.Identifier;
 
-import java.util.Locale;
-import java.util.Set;
-import java.util.stream.Collectors;
 
 public final class ModSounds {
 
@@ -46,6 +44,7 @@ public final class ModSounds {
         DROP_NOTIFY("minecraft:entity.ender_dragon.growl", 0.85F, 1.00F),
         NODE_ALERT("minecraft:block.note_block.bell", 2.00F, 1.00F),
         NODE_DEPLETED("minecraft:block.note_block.bass", 0.85F, 0.60F),
+        ANNOUNCEMENT("minecraft:block.note_block.chime", 0.80F, 1.00F),
         MENU_CLICK("minecraft:ui.button.click", 0.20F, 1.25F),
         GROUND_ITEM_PING("minecraft:block.note_block.pling", 0.90F, 1.00F);
 
@@ -60,28 +59,13 @@ public final class ModSounds {
         }
     }
 
-    /**
-     * sounds the mod is allowed to play. rebuilt on config load/save.
-     * slot lock + menu click are always in here since you can't change those
-     */
-    private static final Set<String> ALLOWED_SOUND_IDS = new java.util.HashSet<>();
-    static {
-        ALLOWED_SOUND_IDS.add(Cue.SLOT_LOCK.soundId.toLowerCase(Locale.ROOT));
-        ALLOWED_SOUND_IDS.add(Cue.MENU_CLICK.soundId.toLowerCase(Locale.ROOT));
-    }
+    /** > 0 while one of our own sounds is being started. Starting a sound is synchronous on the
+     * client thread (player.playSound -> world.playSoundClient -> SoundManager -> SoundSystem), so
+     * the "mod only sounds" filter in SoundSystemMixin can tell our sounds from everything else,
+     * even when the server plays the very same sound id. */
+    private static int playingOwn = 0;
 
-    /**
-     * rebuild the allowlist from whatever's configured on enabled features.
-     * call after config load/save
-     */
-    public static void rebuildActiveSounds(Iterable<String> activeSoundIds) {
-        ALLOWED_SOUND_IDS.clear();
-        ALLOWED_SOUND_IDS.add(Cue.SLOT_LOCK.soundId.toLowerCase(Locale.ROOT));
-        ALLOWED_SOUND_IDS.add(Cue.MENU_CLICK.soundId.toLowerCase(Locale.ROOT));
-        for (String id : activeSoundIds) {
-            if (id != null) ALLOWED_SOUND_IDS.add(id.toLowerCase(Locale.ROOT));
-        }
-    }
+    public static boolean isPlayingOwn() { return playingOwn > 0; }
 
     private ModSounds() {
     }
@@ -101,7 +85,7 @@ public final class ModSounds {
         Identifier id = Identifier.of(cue.soundId);
         SoundEvent sound = Registries.SOUND_EVENT.get(id);
         if (sound == null) return;
-        client.player.playSound(sound, volume, pitch);
+        playOwn(client, sound, volume, pitch);
     }
 
     public static void playConfig(MinecraftClient client, SoundConfig config) {
@@ -110,14 +94,33 @@ public final class ModSounds {
             Identifier id = Identifier.of(config.soundId);
             SoundEvent sound = Registries.SOUND_EVENT.get(id);
             if (sound == null) return;
-            client.player.playSound(sound, config.volume, config.pitch);
+            playOwn(client, sound, config.volume, config.pitch);
         } catch (Exception ignored) {}
     }
 
-    public static boolean isAllowedSoundId(String soundId) {
-        if (soundId == null) {
-            return false;
+    /** Plays on the player, on the Players volume slider, marked as ours for the mod-only filter. */
+    private static void playOwn(MinecraftClient client, SoundEvent sound, float volume, float pitch) {
+        playingOwn++;
+        try {
+            client.player.playSound(sound, volume, pitch);
+        } finally {
+            playingOwn--;
         }
-        return ALLOWED_SOUND_IDS.contains(soundId.toLowerCase(Locale.ROOT));
+    }
+
+    /** An alert, loud: played straight to the player (not from their position, so nothing
+     * muffles it) at the config's volume and pitch. Marked as ours, so mod-only sounds keeps it. */
+    public static void playAlert(MinecraftClient client, SoundConfig config) {
+        if (client.player == null || config == null) return;
+        try {
+            SoundEvent sound = Registries.SOUND_EVENT.get(Identifier.of(config.soundId));
+            if (sound == null) return;
+            playingOwn++;
+            try {
+                client.getSoundManager().play(PositionedSoundInstance.ui(sound, config.pitch, config.volume));
+            } finally {
+                playingOwn--;
+            }
+        } catch (Exception ignored) {}
     }
 }

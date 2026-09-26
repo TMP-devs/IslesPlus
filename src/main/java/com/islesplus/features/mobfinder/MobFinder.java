@@ -7,6 +7,7 @@ import com.islesplus.features.voidcrystalfinder.VoidCrystalFinder;
 import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.decoration.DisplayEntity;
@@ -133,6 +134,7 @@ public final class MobFinder {
     }
 
     public static boolean shouldForceGlow(Entity entity) {
-        return mobFinderEnabled && entity != null && glowingEntityIds.contains(entity.getId());
+        // the remote check matters: a killed finder's tick stops, so its set keeps the last entities
+        return mobFinderEnabled && !FeatureFlags.isKilled("mob_finder") && entity != null && glowingEntityIds.contains(entity.getId());
     }
 }

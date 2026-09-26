@@ -36,9 +36,6 @@ public class TextField extends Widget {
     private Runnable onBlur;
     private boolean light = false;
     protected boolean centered = false;
-    /** Draw what the user typed in the vanilla font so upper and lower case are distinguishable.
-     * On by default; HexField turns it off (hex is case-insensitive and shown in capitals). */
-    protected boolean mixedCase = true;
 
     public boolean focused;
     /** Ctrl/Cmd+A state: the whole text is selected (there is no partial selection). */
@@ -128,15 +125,13 @@ public class TextField extends Widget {
         if (t.isEmpty()) {
             // Empty: the placeholder is a dim background hint and the cursor sits at the START,
             // over its first letter. The hint disappears as soon as anything is typed.
-            String hint = Fonts.ellipsize(placeholder, maxW);
-            int hintX = centered ? x + (w - Fonts.width(hint, Fonts.BODY)) / 2 : x + 4;
-            Fonts.draw(ctx, hint, hintX, ty, placeholderC, Fonts.BODY);
-            if (cursorOn) Fonts.draw(ctx, "_", hintX, ty, textC, Fonts.BODY);
+            String hint = ellipsizeField(placeholder, maxW);
+            int hintX = centered ? x + (w - Fonts.fieldWidth(hint)) / 2 : x + 4;
+            Fonts.drawField(ctx, hint, hintX, ty, placeholderC);
+            if (cursorOn) Fonts.drawField(ctx, "_", hintX, ty, textC);
             return;
         }
 
-        // Typed text is drawn in a mixed-case font when the field is case sensitive (Silkscreen has
-        // no lowercase glyphs, so "Scrolls" and "SCROLLS" would look identical in it).
         String display = cursorOn ? t + "_" : t;
         while (!display.isEmpty() && typedWidth(display) > maxW) {
             display = display.substring(1);
@@ -154,13 +149,20 @@ public class TextField extends Widget {
         }
     }
 
+    /** What is typed, and the hint, are in Pixelify Sans: the text-field face. */
     private int typedWidth(String s) {
-        return mixedCase ? Fonts.plainWidth(s) : Fonts.width(s, Fonts.BODY);
+        return Fonts.fieldWidth(s);
     }
 
     private void drawTyped(DrawContext ctx, String s, int tx, int ty, int colour) {
-        if (mixedCase) Fonts.drawPlain(ctx, s, tx, ty, colour);
-        else Fonts.draw(ctx, s, tx, ty, colour, Fonts.BODY);
+        Fonts.drawField(ctx, s, tx, ty, colour);
+    }
+
+    private static String ellipsizeField(String s, int maxW) {
+        if (Fonts.fieldWidth(s) <= maxW) return s;
+        StringBuilder sb = new StringBuilder(s);
+        while (sb.length() > 0 && Fonts.fieldWidth(sb + "...") > maxW) sb.deleteCharAt(sb.length() - 1);
+        return sb + "...";
     }
 
     @Override public boolean mouseClicked(double mx, double my, int button) {

@@ -17,28 +17,40 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.util.math.Vec3d;
 
 public final class PlushieRepository {
+    /** one client for every fetch: a new one each time would each keep a thread until GC */
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private static final String URL = "https://tmp-devs.github.io/islesplusjson/plushies.json";
     private static final Path DATA_DIR = FabricLoader.getInstance().getConfigDir().resolve("islesplus");
     private static final Path CACHE_PATH = DATA_DIR.resolve("plushie_cache.json");
     private static final Path OWNED_PATH = DATA_DIR.resolve("plushie_owned.json");
+    private static final Path SEEN_PATH = DATA_DIR.resolve("plushie_seen.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final AtomicBoolean refreshInFlight = new AtomicBoolean(false);
     private static final long CLOSEST_REFRESH_MS = 1000L;
+    /** The reset button does two file writes and a download, so it gets a hard cooldown on top of
+     * the confirm click in the UI. */
+    private static final long RESET_COOLDOWN_MS = 5000L;
     private static final double CLOSEST_POS_EPSILON_SQ = 1.0; // 1 block squared
 
     private static volatile List<PlushieEntry> cachedPlushies = Collections.emptyList();
     /** plushie numbers we own. thread safe, no max since they keep adding more */
     private static final Set<Integer> owned = ConcurrentHashMap.newKeySet();
+    /** Every plushie number the in-game menu has ever shown us, found or not. This is the server's
+     * own roster, and it is what tells "not found yet" apart from "never read that page". */
+    private static final Set<Integer> seen = ConcurrentHashMap.newKeySet();
+    private static volatile int highestSeen = -1;
     private static long closestComputedAtMs = 0L;
     private static PlushieEntry closestCached = null;
     private static Vec3d closestFromCached = null;
     private static final Object closestCacheLock = new Object();
+    private static volatile long lastResetAtMs = 0L;
 
     private PlushieRepository() {}
 
     /** call once on startup. loads the cached file then grabs a fresh copy in the background */
     public static void init() {
         loadOwned();
+        loadSeen();
         List<PlushieEntry> local = parseJson(readFile(CACHE_PATH));
         if (local != null) {
             cachedPlushies = List.copyOf(local);
@@ -114,6 +126,91 @@ public final class PlushieRepository {
         saveOwned();
     }
 
+    /**
+     * Record the plushie numbers a menu page just showed. Union only: a page that loads late or
+     * half-drawn can add to the roster but never shrink it.
+     */
+    public static void markSeen(Collection<Integer> nums) {
+        if (nums == null || nums.isEmpty()) return;
+        boolean changed = false;
+        for (Integer num : nums) {
+            if (num == null || num < 0) continue;
+            if (seen.add(num)) {
+                changed = true;
+                if (num > highestSeen) highestSeen = num;
+            }
+        }
+        if (!changed) return;
+        invalidateClosestCache();
+        saveSeen();
+    }
+
+    /**
+     * A plushie the data file lists that the server's own menu does not: below the highest number
+     * the menu has ever shown us, yet never shown, and not found. Ghosts are left out of the
+     * found / total tally, but still get a waypoint: some plushies (#46) are hidden from /plushies
+     * until you find them, and only then does the menu list them. So a found plushie is never a
+     * ghost - it joins the tally the moment the "you found" chat line marks it owned (x/53 becomes
+     * x+1/54), without waiting for the next /plushies visit. Numbers above what we have read are
+     * left alone - those are pages we simply have not opened, or a plushie added ahead of the menu.
+     */
+    public static boolean isGhost(int num) {
+        return highestSeen >= 0 && num < highestSeen && !seen.contains(num) && !owned.contains(num);
+    }
+
+    /** Plushies in the data file that the menu agrees exist (everything but the ghosts). */
+    public static int findableCount() {
+        int n = 0;
+        for (PlushieEntry p : cachedPlushies) {
+            if (!isGhost(p.num)) n++;
+        }
+        return n;
+    }
+
+    /** Plushies we have never read a menu page for, so we cannot know whether they are found.
+     * One the chat already told us is found is known, so it does not count as unread. */
+    public static int unreadCount() {
+        int n = 0;
+        for (PlushieEntry p : cachedPlushies) {
+            if (!seen.contains(p.num) && !owned.contains(p.num) && !isGhost(p.num)) n++;
+        }
+        return n;
+    }
+
+    /** True while the reset button is still on cooldown from the last reset. */
+    public static boolean isResetOnCooldown() {
+        return System.currentTimeMillis() - lastResetAtMs < RESET_COOLDOWN_MS;
+    }
+
+    /**
+     * Wipe every plushie the player has found *and* re-download the plushie list, so one button
+     * clears both halves of the feature's state. False when it is on cooldown or a download is
+     * already running, in which case nothing was touched.
+     */
+    public static boolean resetFoundAndRefresh() {
+        if (isResetOnCooldown() || isRefreshing()) return false;
+        lastResetAtMs = System.currentTimeMillis();
+        clearOwned();
+        clearSeen();
+        // the open menu (if any) has to be read again from scratch now that nothing is owned
+        PlushieMenuHook.forgetLastPage();
+        refreshRemoteDataNowAsync();
+        return true;
+    }
+
+    private static void clearOwned() {
+        owned.clear();
+        invalidateClosestCache();
+        saveOwned();
+    }
+
+    private static void clearSeen() {
+        seen.clear();
+        highestSeen = -1;
+        invalidateClosestCache();
+        saveSeen();
+    }
+
     // -------------------------------------------------------------------------
 
     /** blocking refresh. true if it worked, false if it failed or one was already running */
@@ -128,9 +225,7 @@ public final class PlushieRepository {
 
     public static boolean fetchAndCache() {
         try {
-            HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(8))
-                .build();
+            HttpClient client = HTTP;
             HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(URL))
                 .timeout(Duration.ofSeconds(8))
@@ -241,6 +336,31 @@ public final class PlushieRepository {
         writeFile(OWNED_PATH, GSON.toJson(obj));
     }
 
+    private static void loadSeen() {
+        String raw = readFile(SEEN_PATH);
+        if (raw == null) return;
+        try {
+            JsonArray arr = JsonParser.parseString(raw).getAsJsonArray();
+            for (JsonElement value : arr) {
+                if (!value.isJsonPrimitive()) continue;
+                int num = value.getAsInt();
+                if (num < 0) continue;
+                seen.add(num);
+                if (num > highestSeen) highestSeen = num;
+            }
+        } catch (Exception e) {
+            IslesLog.runtimeWarn("[Isles+] PlushieFinder: failed to load menu roster", e);
+        }
+    }
+
+    private static void saveSeen() {
+        List<Integer> sorted = new ArrayList<>(seen);
+        Collections.sort(sorted);
+        JsonArray arr = new JsonArray();
+        for (int num : sorted) arr.add(num);
+        writeFile(SEEN_PATH, GSON.toJson(arr));
+    }
+
     private static String readFile(Path path) {
         if (!Files.exists(path)) return null;
         try {
@@ -270,7 +390,9 @@ public final class PlushieRepository {
         PlushieEntry closest = null;
         double best = Double.MAX_VALUE;
         for (PlushieEntry p : cachedPlushies) {
+            // ghosts are NOT skipped: a menu-hidden plushie still exists in the world
             if (isOwned(p.num)) continue;
+            if (p.num == 1 && PlushieFinder.hideFirstPlushie) continue;
             double d = dist2(from, p.xReal, p.yReal, p.zReal);
             if (p.hasEntrance()) {
                 d = Math.min(d, dist2(from, p.xEntrance, p.yEntrance, p.zEntrance));
@@ -283,7 +405,8 @@ public final class PlushieRepository {
         return closest;
     }
 
-    private static void invalidateClosestCache() {
+    /** Re-picks the nearest plushie on the next ask (after a setting that changes the choice). */
+    public static void invalidateClosestCache() {
         synchronized (closestCacheLock) {
             closestComputedAtMs = 0L;
             closestCached = null;

@@ -1,11 +1,13 @@
 package com.islesplus.features.nodealertmanager;
 
+import com.islesplus.logging.IslesLog;
 import com.islesplus.IslesClient;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.entity.NodeSnapshot;
 import com.islesplus.entity.TrackedNode;
+import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.harvesttimer.HarvestTimer;
 import com.islesplus.features.noderadius.NodeRadiusRenderer;
 import com.islesplus.features.qtetracker.QteTracker;
@@ -53,7 +55,8 @@ public class NodeTracker {
             || NodeAlertManager.depletionPingEnabled
             || NodeRadiusRenderer.nodeRadiusEnabled
             || HarvestTimer.harvestTimerEnabled
-            || QteTracker.qteTrackerEnabled;
+            || QteTracker.qteTrackerEnabled
+            || BerryAlert.berryAlertEnabled;
         
         if (!nodeUpdatesEnabled) {
             clearTrackedNode(client, "node updates disabled");
@@ -85,7 +88,12 @@ public class NodeTracker {
             // chance bar is up, whichever node is closest to it is the one we're farming
             snapshot = findNearestNodeSnapshotToAnchor(chanceAnchor, scan.textDisplaysNear);
         } else {
-            snapshot = findNearestNodeSnapshot(client, scan);
+            // Stay on the node we were farming while it is still in range, whatever its label says
+            // now: a depleted node's label need not look like a live one ("<count>x <name>"), and
+            // dropping it there meant the depletion and regen pings could never fire.
+            snapshot = trackedNode != null && trackedNode.armed
+                ? findTrackedSnapshot(trackedNode, client, scan.textDisplaysNearDouble) : null;
+            if (snapshot == null) snapshot = findNearestNodeSnapshot(client, scan);
         }
         long now = Util.getMeasuringTimeMs();
         if (snapshot == null) {
@@ -106,6 +114,12 @@ public class NodeTracker {
             NodeAlertManager.regenReminderActive = false;
             IslesClient.sendStatusMessage(client, "Tracking candidate node: " + snapshot.nodeName);
             return;
+        }
+
+        if (!snapshot.normalizedText.equals(trackedNode.lastLabel)) {
+            IslesLog.runtimeInfo("[Isles+] node label: \"" + trackedNode.lastLabel + "\" -> \"" + snapshot.normalizedText
+                + "\" (depleted=" + snapshot.depleted + ", armed=" + trackedNode.armed + ")");
+            trackedNode.lastLabel = snapshot.normalizedText;
         }
 
         // refresh the position in case the entity got re-added somewhere slightly different
@@ -210,7 +224,7 @@ public class NodeTracker {
             if (matchedNode == null) {
                 continue;
             }
-            boolean depleted = normalized.startsWith("depleted " + matchedNode.toLowerCase(Locale.ROOT));
+            boolean depleted = isDepleted(normalized, matchedNode);
             int count = extractLeadingCount(normalized);
             NodeSnapshot candidate = new NodeSnapshot(entity.getUuid(), matchedNode, normalized, count, depleted, distanceSq, entity.getX(), entity.getY(), entity.getZ());
             if (nearest == null || candidate.distanceSq < nearest.distanceSq) {
@@ -232,7 +246,7 @@ public class NodeTracker {
             if (matchedNode == null) {
                 continue;
             }
-            boolean depleted = normalized.startsWith("depleted " + matchedNode.toLowerCase(Locale.ROOT));
+            boolean depleted = isDepleted(normalized, matchedNode);
             int count = extractLeadingCount(normalized);
             double dx = entity.getX() - anchor.getX();
             double dy = entity.getY() - anchor.getY();
@@ -260,12 +274,43 @@ public class NodeTracker {
             if (matchedNode == null) {
                 return null;
             }
-            boolean depleted = normalized.startsWith("depleted " + matchedNode.toLowerCase(Locale.ROOT));
+            boolean depleted = isDepleted(normalized, matchedNode);
             int count = extractLeadingCount(normalized);
             double distanceSq = client.player.squaredDistanceTo(entity);
             return new NodeSnapshot(entity.getUuid(), matchedNode, normalized, count, depleted, distanceSq, entity.getX(), entity.getY(), entity.getZ());
         }
         return null;
+    }
+
+    /** Max distance (blocks) a replacement label may sit from the tracked one and still be it. */
+    private static final double SAME_SPOT_SQ = 1.0;
+
+    /** The tracked node's label, found by its entity, or - if the server swapped the entity - by a
+     * text display at the same spot. Read leniently: a label that no longer shows a live
+     * "<count>x <name>" counts as depleted. Null when neither is in range. */
+    static NodeSnapshot findTrackedSnapshot(TrackedNode node, MinecraftClient client, List<Entity> textDisplays) {
+        Entity match = null;
+        for (Entity entity : textDisplays) {
+            if (!(entity instanceof DisplayEntity.TextDisplayEntity)) continue;
+            if (entity.getUuid().equals(node.textDisplayUuid)) { match = entity; break; }
+            double dx = entity.getX() - node.nodeX, dy = entity.getY() - node.nodeY, dz = entity.getZ() - node.nodeZ;
+            if (match == null && dx * dx + dy * dy + dz * dz <= SAME_SPOT_SQ) match = entity;
+        }
+        if (match == null) return null;
+        String normalized = normalizeNodeText(((DisplayEntity.TextDisplayEntity) match).getText().getString());
+        // the chance bar or another rig's text at the same spot is not the node's label
+        if (normalized.contains("% chance")) return null;
+        int count = extractLeadingCount(normalized);
+        boolean depleted = labelShowsDepleted(normalized, node.nodeName, count);
+        return new NodeSnapshot(node.textDisplayUuid, node.nodeName, normalized, count, depleted,
+            client.player.squaredDistanceTo(match), match.getX(), match.getY(), match.getZ());
+    }
+
+    /** Depleted: it says so, or it no longer reads as a live node (name gone, or no count above 0). */
+    static boolean labelShowsDepleted(String normalized, String nodeName, int count) {
+        if (isDepleted(normalized, nodeName)) return true;
+        if (normalized.contains("deplet") || normalized.contains("regenerat") || normalized.contains("respawn")) return true;
+        return !normalized.contains(nodeName.toLowerCase(Locale.ROOT)) || count <= 0;
     }
 
     static Entity findChanceSignalAnchor(List<Entity> textDisplays, TrackedNode trackedNode, MinecraftClient client) {
@@ -346,6 +391,21 @@ public class NodeTracker {
             .replaceAll("\\s+", " ")
             .trim()
             .toLowerCase(Locale.ROOT);
+    }
+
+    /** Whether a node label reads as depleted: "depleted <node name>". The label used to start
+     * with that, but it now opens with a quality tag ("[rich]", "[weak]", "[poor]"), so a plain
+     * startsWith never matched and the depletion (and regen) ping never fired. Leading [tags] are
+     * skipped; failing that, the phrase anywhere in the label counts. */
+    static boolean isDepleted(String normalizedText, String nodeName) {
+        String phrase = "depleted " + nodeName.toLowerCase(Locale.ROOT);
+        String rest = normalizedText;
+        while (rest.startsWith("[")) {
+            int close = rest.indexOf(']');
+            if (close < 0) break;
+            rest = rest.substring(close + 1).trim();
+        }
+        return rest.startsWith(phrase) || normalizedText.contains(phrase);
     }
 
     public static String matchKnownNodeName(String normalizedText) {

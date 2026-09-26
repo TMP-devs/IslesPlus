@@ -80,9 +80,9 @@ public class Dialog extends Widget {
 
         int titleLeft = panelX + PAD;
         int titleRight = closeButton.x - 4;
-        String shown = Fonts.ellipsize(title, Math.max(0, titleRight - titleLeft));
+        String shown = Fonts.ellipsizeHeading(title, Math.max(0, titleRight - titleLeft), Fonts.BODY);
         int textH = Fonts.height(Fonts.BODY);
-        Fonts.draw(ctx, shown, titleLeft, panelY + (Metrics.DIALOG_TITLE_H - textH) / 2, Theme.CREAM, Fonts.BODY);
+        Fonts.drawHeading(ctx, shown, titleLeft, panelY + (Metrics.DIALOG_TITLE_H - textH) / 2, Theme.CREAM, Fonts.BODY);
 
         closeButton.render(ctx, mouseX, mouseY);
         body.render(ctx, mouseX, mouseY);

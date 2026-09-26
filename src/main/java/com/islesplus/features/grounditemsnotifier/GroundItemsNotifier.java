@@ -87,7 +87,7 @@ public final class GroundItemsNotifier {
     // ---- Queries used by renderers ----
 
     public static boolean shouldForceGlow(Entity entity) {
-        if (!groundItemsNotifierEnabled || entity == null) return false;
+        if (!groundItemsNotifierEnabled || entity == null || FeatureFlags.isKilled("ground_items_notifier")) return false;
         WatchedItem item = matchingEntityMap.get(entity.getId());
         return item != null && item.highlight;
     }

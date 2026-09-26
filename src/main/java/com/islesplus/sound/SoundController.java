@@ -3,6 +3,12 @@ package com.islesplus.sound;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
 
+/**
+ * "Mod-only sounds": in an Isles world, the only sounds you hear are the ones Isles+ plays (node
+ * pings, alerts, its menu clicks) plus the game's own menu clicks (UI category), so menus still
+ * click. Everything else - world, mobs, blocks, music, and every sound the server sends - is muted.
+ * The hub (world OTHER) is never touched.
+ */
 public final class SoundController {
     private static boolean modOnlySoundsEnabled = false;
 
@@ -17,11 +23,21 @@ public final class SoundController {
         return modOnlySoundsEnabled;
     }
 
-    public static boolean shouldMuteIncomingSound(String soundId) {
-        return modOnlySoundsEnabled && WorldIdentification.world != PlayerWorld.OTHER && !ModSounds.isAllowedSoundId(soundId);
+    private static boolean filtering() {
+        return modOnlySoundsEnabled && WorldIdentification.world != PlayerWorld.OTHER;
     }
 
-    public static boolean shouldAllowLocalSound(String soundId) {
-        return WorldIdentification.world == PlayerWorld.OTHER || !modOnlySoundsEnabled || ModSounds.isAllowedSoundId(soundId);
+    /** A sound packet from the server: never ours, so muted whenever the filter is on. */
+    public static boolean shouldMuteIncomingSound() {
+        return filtering();
+    }
+
+    /** A sound about to start on this client. */
+    public static boolean shouldAllowLocalSound(boolean uiCategory) {
+        return allow(filtering(), ModSounds.isPlayingOwn(), uiCategory);
+    }
+
+    static boolean allow(boolean filtering, boolean own, boolean uiCategory) {
+        return !filtering || own || uiCategory;
     }
 }

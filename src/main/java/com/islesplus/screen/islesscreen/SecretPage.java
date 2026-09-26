@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * The page behind the Konami code. A second scroll, the size of the /ip one, slowly unrolls over
- * it; the message is hand-written in the signature script, and "I SAW NOTHING" at the foot rolls
+ * it; the message is hand-written in the signature script, and "I saw nothing" at the foot rolls
  * it away again. Nothing else is here yet - which is what the message says.
  */
 final class SecretPage extends Widget {
@@ -44,7 +44,7 @@ final class SecretPage extends Widget {
     private SecretPage(OverlayHost host, int wantedContentW) {
         this.host = host;
         this.wantedContentW = wantedContentW;
-        this.back = new Button("I SAW NOTHING", Button.Kind.PRIMARY, () -> {
+        this.back = new Button("I saw nothing", Button.Kind.PRIMARY, () -> {
             FoundReport.sendOnce();   // verified with Mojang, once per player; see the note beside the button
             host.closeOverlay(this);
         }).fill();
@@ -71,7 +71,7 @@ final class SecretPage extends Widget {
         return this.h;
     }
 
-    /** Greedy word wrap measured in the script font (Fonts.wrap measures Silkscreen). */
+    /** Greedy word wrap measured in the script font (Fonts.wrap measures the body face). */
     private static List<String> wrapScript(String text, int maxWidth) {
         List<String> out = new ArrayList<>();
         StringBuilder line = new StringBuilder();
@@ -105,9 +105,9 @@ final class SecretPage extends Widget {
             String line = lines.get(i);
             int lineY = firstY + i * LINE_PITCH;
             if (script) {
-                Fonts.drawScript(ctx, line, frame.contentX + (frame.contentW - Fonts.scriptWidth(line)) / 2, lineY, Theme.INK);
+                Fonts.drawScript(ctx, line, frame.contentX + (frame.contentW - Fonts.scriptWidth(line)) / 2, lineY, Theme.TEXT_TITLE);
             } else {
-                Fonts.drawCentered(ctx, line, frame.contentX + frame.contentW / 2, lineY, Theme.INK, Fonts.BODY);
+                Fonts.drawCentered(ctx, line, frame.contentX + frame.contentW / 2, lineY, Theme.TEXT_TITLE, Fonts.BODY);
             }
         }
         back.render(ctx, mouseX, mouseY);

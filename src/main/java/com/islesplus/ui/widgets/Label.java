@@ -47,8 +47,7 @@ public class Label extends Widget {
         this.x = x; this.y = y;
         if (wrap) {
             this.w = width;
-            int rawMax = Math.max(0, (int) Math.floor(width / (double) Fonts.snap(scale)));
-            lines = Fonts.wrap(text.get(), rawMax);
+            lines = Fonts.wrap(text.get(), width, scale);
             this.h = Math.max(1, lines.size()) * lineH();
         } else {
             int natural = fixedWidth != null ? fixedWidth : Fonts.width(text.get(), scale);
@@ -65,7 +64,7 @@ public class Label extends Widget {
             }
         } else {
             String shown = text.get();
-            if (Fonts.width(shown, scale) > w) shown = Fonts.ellipsize(shown, (int) Math.floor(w / Fonts.snap(scale)));
+            if (Fonts.width(shown, scale) > w) shown = Fonts.ellipsize(shown, w, scale);
             Fonts.draw(ctx, shown, x, y, colour, scale);
         }
     }

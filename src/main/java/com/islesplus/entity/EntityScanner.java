@@ -35,6 +35,7 @@ public final class EntityScanner {
         List<Entity> armorStands = new ArrayList<>();
         List<Entity> itemEntities = new ArrayList<>();
         List<Entity> blockDisplays = new ArrayList<>();
+        List<Entity> blockDisplaysFar = new ArrayList<>();
 
         for (Entity entity : client.world.getEntities()) {
             if (entity == client.player) continue;
@@ -62,6 +63,7 @@ public final class EntityScanner {
                 }
                 case "entity.minecraft.item" -> itemEntities.add(entity);
                 case "entity.minecraft.block_display" -> {
+                    blockDisplaysFar.add(entity);
                     if (distSq <= RADIUS_NEAR_DOUBLE_SQ) blockDisplays.add(entity);
                 }
             }
@@ -78,7 +80,8 @@ public final class EntityScanner {
             slimes,
             armorStands,
             itemEntities,
-            blockDisplays
+            blockDisplays,
+            blockDisplaysFar
         );
     }
 }

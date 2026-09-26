@@ -31,7 +31,7 @@ import java.util.List;
  * active.
  *
  * <p>The member list is rebuilt from scratch (in {@link DrawerBody#layout}) whenever the active
- * group's identity or member count has changed since the last build — the same kind of
+ * group's identity or member count has changed since the last build, the same kind of
  * change-detection {@link GroundItemsRow} and {@link BossTimersRow} use for their dynamic lists.
  */
 public final class AutoPartyRow {
@@ -76,8 +76,8 @@ public final class AutoPartyRow {
                 () -> { AutoParty.autoLeaveDisband = !AutoParty.autoLeaveDisband; IslesPlusConfig.save(); });
 
             Flow.WrapRow actions = new Flow.WrapRow(ROW_GAP, ROW_GAP).align(Flow.Align.END)
-                .add(new Button("ADD FRIEND", Button.Kind.PRIMARY, this::addFriend).plus())
-                .add(new Button("NEW GROUP", Button.Kind.SECONDARY, this::newGroup).plus());
+                .add(new Button("Add friend", Button.Kind.PRIMARY, this::addFriend).plus())
+                .add(new Button("New group", Button.Kind.SECONDARY, this::newGroup).plus());
 
             column.add(autoLeave)
                 .add(new PagerBar(host))
@@ -114,7 +114,7 @@ public final class AutoPartyRow {
             List<String> members = group.members;
             TextField last = null;
             if (members.isEmpty()) {
-                memberColumn.add(new EmptyBox("NO ONE IN THIS GROUP YET"));
+                memberColumn.add(new EmptyBox("No one in this group yet"));
             } else {
                 for (int i = 0; i < members.size(); i++) {
                     final int idx = i;
@@ -125,7 +125,7 @@ public final class AutoPartyRow {
                         .onBlur(IslesPlusConfig::save)
                         .noSpaces()
                         .ring(Theme.SURFACE_RING);
-                    Button remove = new Button("REMOVE", Button.Kind.ICON, () -> removeMember(group, idx));
+                    Button remove = new Button("Remove", Button.Kind.ICON, () -> removeMember(group, idx));
                     memberColumn.add(new Flow.WrapRow(ROW_GAP, ROW_GAP).add(field).add(remove));
                     last = field;
                 }
@@ -176,8 +176,8 @@ public final class AutoPartyRow {
 
         private int editX, deleteX, leftW;
 
-        /** Wide enough for "EDIT" (the longer label) with EDIT_PAD either side, so OK does not resize the bar. */
-        private static int editW() { return Fonts.width("EDIT", Fonts.SMALL) + EDIT_PAD * 2; }
+        /** Wide enough for "Edit" (the longer label) with EDIT_PAD either side, so OK does not resize the bar. */
+        private static int editW() { return Fonts.width("Edit", Fonts.SMALL) + EDIT_PAD * 2; }
 
         PagerBar(OverlayHost host) {
             this.host = host;
@@ -218,7 +218,7 @@ public final class AutoPartyRow {
             int players = group.members.size();
             String message = "Delete the group \"" + group.name + "\" and its " + players
                 + (players == 1 ? " player" : " players") + "? This cannot be undone.";
-            ConfirmDialog.open(host, "DELETE GROUP", message, "DELETE", this::deleteActive);
+            ConfirmDialog.open(host, "Delete group", message, "Delete", this::deleteActive);
         }
 
         private void deleteActive() {
@@ -254,7 +254,7 @@ public final class AutoPartyRow {
             if (renaming) renameField.render(ctx, mouseX, mouseY);
             else dropdown.render(ctx, mouseX, mouseY);
 
-            renderSegment(ctx, mouseX, mouseY, editX, editW(), renaming ? "OK" : "EDIT", false);
+            renderSegment(ctx, mouseX, mouseY, editX, editW(), renaming ? "OK" : "Edit", false);
             renderSegment(ctx, mouseX, mouseY, deleteX, DELETE_W, null, true);
         }
 
@@ -316,7 +316,7 @@ public final class AutoPartyRow {
          * (the container's pre-pass over children that do not contain the click point, or its
          * sweep after a sibling consumes it), which is the signal that the rename is over.
          * Enter, OK and Escape have all already cleared {@code renaming} by the time they get
-         * here — Escape via the field's onCancel, so a cancelled rename is never committed —
+         * here, Escape via the field's onCancel, so a cancelled rename is never committed,
          * which also makes this idempotent, as unfocus() must be. */
         @Override public void unfocus() {
             if (renaming) commitRename();

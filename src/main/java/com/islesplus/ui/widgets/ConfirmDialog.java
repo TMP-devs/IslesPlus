@@ -22,7 +22,7 @@ public final class ConfirmDialog {
         Widget body = new Flow.Column(9)
             .add(new Label(message, Theme.TEXT_LABEL, Fonts.BODY).wrap())
             .add(new Flow.WrapRow(4, 4)
-                .add(new Button("CANCEL", Button.Kind.QUIET, () -> host.closeOverlay(dialogRef[0])).fill())
+                .add(new Button("Cancel", Button.Kind.QUIET, () -> host.closeOverlay(dialogRef[0])).fill())
                 .add(new Button(confirmLabel, Button.Kind.PRIMARY, () -> {
                     onConfirm.run();
                     host.closeOverlay(dialogRef[0]);

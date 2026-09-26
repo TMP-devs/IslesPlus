@@ -4,6 +4,7 @@ import com.islesplus.entity.EntityScanResult;
 import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.Entity;
@@ -122,6 +123,7 @@ public final class VendingMachineFinder {
     }
 
     public static boolean shouldForceGlow(Entity entity) {
-        return vendingMachineFinderEnabled && entity != null && glowingEntityIds.contains(entity.getId());
+        // the remote check matters: a killed finder's tick stops, so its set keeps the last entities
+        return vendingMachineFinderEnabled && !FeatureFlags.isKilled("vending_machine_finder") && entity != null && glowingEntityIds.contains(entity.getId());
     }
 }

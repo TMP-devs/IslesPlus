@@ -12,14 +12,13 @@ import net.minecraft.client.option.KeyBinding;
 import net.minecraft.client.util.InputUtil;
 import org.lwjgl.glfw.GLFW;
 
-import java.util.Locale;
 
-/** 14-high keybind chip, sized to its text (at least 48 wide): shows the bound key, "UNBOUND" or, while listening for the next
- * press, "PRESS A KEY". Clicking the chip toggles listening; while listening any key or mouse
+/** 14-high keybind chip, sized to its text (at least 48 wide): shows the bound key, "Unbound" or, while listening for the next
+ * press, "Press a key". Clicking the chip toggles listening; while listening any key or mouse
  * button rebinds it (Escape unbinds), consuming the input either way.
  * <p>Contract: a host must deliver every left click either to this widget or call
  * {@code unfocus()} on it, so a click elsewhere always cancels listening; Flow containers
- * already do this for siblings. It must also deliver non-left clicks — this is the only widget
+ * already do this for siblings. It must also deliver non-left clicks, this is the only widget
  * in the kit that wants them, and the only way a mouse button can be bound at all. Those clicks
  * must arrive WITHOUT the usual unfocus sweeps around them, or the chip would be cancelled by
  * the very click it is waiting for; {@link com.islesplus.ui.Flow} and the /ip screen both run
@@ -33,7 +32,7 @@ public class KeyChip extends Widget {
     }
 
     private static final int MIN_W = 48, PAD_X = 4;
-    private static final String LISTENING_LABEL = "PRESS A KEY", UNBOUND_LABEL = "UNBOUND";
+    private static final String LISTENING_LABEL = "Press a key", UNBOUND_LABEL = "Unbound";
 
     /** Wide enough for the longest thing this chip can say - its listening prompt or its current
      * key name - at the text size the GUI scale really gives (SMALL snaps to full size at GUI
@@ -44,7 +43,7 @@ public class KeyChip extends Widget {
     }
 
     private String keyLabel() {
-        return binding.isUnbound() ? UNBOUND_LABEL : binding.getBoundKeyLocalizedText().getString().toUpperCase(Locale.ROOT);
+        return binding.isUnbound() ? UNBOUND_LABEL : binding.getBoundKeyLocalizedText().getString();
     }
 
     @Override public int layout(int x, int y, int width) {
@@ -73,8 +72,7 @@ public class KeyChip extends Widget {
 
         float scale = Fonts.SMALL;
         int maxW = Math.max(0, w - 4);
-        int unscaledMax = (int) Math.floor(maxW / Fonts.snap(scale));
-        String display = Fonts.ellipsize(label, unscaledMax);
+        String display = Fonts.ellipsize(label, maxW, scale);
         int textH = Fonts.height(scale);
         Fonts.drawCentered(ctx, display, x + w / 2, y + (h - textH) / 2, textC, scale);
     }

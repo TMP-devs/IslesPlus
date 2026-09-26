@@ -11,11 +11,11 @@ import net.minecraft.client.gui.DrawContext;
 import java.util.function.BooleanSupplier;
 
 /** Full-width selectable grid tile (18 high): a bevelled cell with a small checkbox indicator
- * at the left and the label after it. Optional small "BETA" tag at the right, and an optional
+ * at the left and the label after it. Optional small "Beta" tag at the right, and an optional
  * disabled state (remote kill switch for a single option): greyed, unticked, not clickable. */
 public class CheckTile extends Widget {
     private static final int PAD = 4;
-    private static final String BETA_LABEL = "BETA", DISABLED_LABEL = "DISABLED";
+    private static final String BETA_LABEL = "Beta", DISABLED_LABEL = "Disabled";
 
     private final String label;
     private final BooleanSupplier get;
@@ -29,8 +29,13 @@ public class CheckTile extends Widget {
         this.onClick = onClick;
     }
 
-    /** Small "BETA" tag at the tile's right edge (oxblood on an idle tile, cream on an active one). */
+    /** Small "Beta" tag at the tile's right edge (oxblood on an idle tile, cream on an active one). */
     public CheckTile beta() { this.beta = true; return this; }
+    /** Lets something else have the last word on the BETA tag (e.g. the remote features json):
+     * given the built-in choice, returns whether to show it. Checked every frame. */
+    public CheckTile betaFrom(java.util.function.UnaryOperator<Boolean> resolver) { this.betaResolver = resolver; return this; }
+    private java.util.function.UnaryOperator<Boolean> betaResolver = b -> b;
+    private boolean showsBeta() { return betaResolver.apply(beta); }
 
     /** While the supplier is true the tile is greyed out, shows DISABLED and ignores clicks. */
     public CheckTile disabledWhen(BooleanSupplier disabled) { this.disabled = disabled; return this; }
@@ -41,7 +46,7 @@ public class CheckTile extends Widget {
 
     /** Width at which the whole label (and any tag) shows without an ellipsis. */
     public int naturalWidth() {
-        String tag = isDisabled() ? DISABLED_LABEL : beta ? BETA_LABEL : null;
+        String tag = isDisabled() ? DISABLED_LABEL : showsBeta() ? BETA_LABEL : null;
         int tagW = tag == null ? 0 : PAD + Fonts.width(tag, Fonts.SMALL);
         return PAD + Metrics.TILE_BOX + PAD + Fonts.width(label) + tagW + PAD;
     }
@@ -71,7 +76,7 @@ public class CheckTile extends Widget {
         Draw.ring(ctx, boxX, boxY, boxSize, boxSize, off ? Theme.DISABLED_RING : box[1]);
         if (active) Draw.tick(ctx, boxX, boxY, boxSize, Theme.TICK);
 
-        String tag = off ? DISABLED_LABEL : beta ? BETA_LABEL : null;
+        String tag = off ? DISABLED_LABEL : showsBeta() ? BETA_LABEL : null;
         int tagW = tag == null ? 0 : Fonts.width(tag, Fonts.SMALL);
         int right = x + w - PAD;
         if (tag != null) {

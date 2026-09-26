@@ -3,6 +3,7 @@ package com.islesplus.features.qtetracker;
 import com.islesplus.entity.EntityScanResult;
 import com.islesplus.entity.NodeSkill;
 import com.islesplus.entity.TrackedNode;
+import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.nodealertmanager.NodeTracker;
 import com.islesplus.sync.FeatureFlags;
 import com.islesplus.world.PlayerWorld;
@@ -53,11 +54,11 @@ public final class QteTracker {
     private static final float WOODCUTTING_TICK_SKIP_HALF = 0.18f;
     private static final float NO_BOX = 0f;
 
-    public static boolean qteTrackerEnabled = true;
+    public static boolean qteTrackerEnabled = false;
 
-    public static boolean qteLuckEnabled = true;
+    public static boolean qteLuckEnabled = false;
     public static boolean qteExpEnabled = false;
-    public static boolean qteChanceEnabled = true;
+    public static boolean qteChanceEnabled = false;
     public static boolean qteCoinsEnabled = false;
     public static boolean qteTickSkipEnabled = false;
 
@@ -91,6 +92,9 @@ public final class QteTracker {
             for (Entity interaction : scan.interactions) {
                 ambientBlacklist.add(interaction.getId());
             }
+            // forget ids whose entity is gone (ids are never reused within a world), so a long
+            // session in one world does not keep growing the set
+            if (ambientBlacklist.size() > 256) ambientBlacklist.removeIf(id -> client.world.getEntityById(id) == null);
             tracked = List.of();
             return;
         }
@@ -165,7 +169,8 @@ public final class QteTracker {
         // interaction is still there, so we keep it around for a bit instead of flickering.
         // modelengine mobs (crabs, tortoises...) also have an interaction with item_display bones on it,
         // but they always have an area effect cloud right under them and their models are modelengine:
-        if (isTypeEnabled(QteType.TICK_SKIP)) {
+        // a berry round wants the player's eyes on the berry, so tick skip steps aside until it ends
+        if (isTypeEnabled(QteType.TICK_SKIP) && !BerryAlert.roundActive()) {
             // the node label says which skill it is, so only look for that skill's rig shape.
             // stops a farming crop box next to a tree getting picked up while woodcutting etc.
             // unknown skill (label didn't say) falls back to accepting either

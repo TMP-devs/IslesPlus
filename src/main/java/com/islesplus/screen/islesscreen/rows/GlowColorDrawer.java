@@ -19,13 +19,13 @@ import java.util.function.Supplier;
 
 /**
  * Reusable drawer body for a row that carries a customizable glow colour (hue/saturation/
- * lightness triple): a "COLOR" label, hue rail and live swatch on one line, and a "BRIGHT"
+ * lightness triple): a "Color" label, hue rail and live swatch on one line, and a "Bright"
  * label, brightness rail and hex field on the next.
  *
  * <p>Dragging the hue or brightness rail leaves saturation untouched, and the brightness rail
  * previews its strip at the stored saturation, so a grey colour shows a grey ramp. Committing a typed hex
  * sets saturation and lightness unconditionally, but only overwrites hue when the parsed colour
- * isn't a grey (saturation 0) — otherwise typing a grey hex would jump the hue knob to red.
+ * isn't a grey (saturation 0), otherwise typing a grey hex would jump the hue knob to red.
  * Every change persists via {@link IslesPlusConfig#save()} on rail release or hex commit, never
  * on intermediate drag ticks.
  */
@@ -52,11 +52,11 @@ public final class GlowColorDrawer {
 
         return new Flow.Column(GAP)
             .add(new Flow.WrapRow(GAP, GAP)
-                .add(new Label("COLOR", Theme.TEXT_LABEL, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "COLOR", "BRIGHT")))
+                .add(new Label("Color", Theme.TEXT_LABEL, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "Color", "Bright")))
                 .add(hueRail)
                 .add(swatch))
             .add(new Flow.WrapRow(GAP, GAP)
-                .add(new Label("BRIGHT", Theme.TEXT_LABEL, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "COLOR", "BRIGHT")))
+                .add(new Label("Bright", Theme.TEXT_LABEL, Fonts.SMALL).fixed(Fonts.labelColumn(Fonts.SMALL, "Color", "Bright")))
                 .add(brightnessRail)
                 .add(new HexField(getRgb, setRgb)));
     }

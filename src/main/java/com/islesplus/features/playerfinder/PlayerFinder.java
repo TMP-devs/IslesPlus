@@ -4,6 +4,7 @@ import com.islesplus.entity.EntityScanResult;
 import com.islesplus.ui.GlowColor;
 import com.islesplus.world.PlayerWorld;
 import com.islesplus.world.WorldIdentification;
+import com.islesplus.sync.FeatureFlags;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
 
@@ -11,7 +12,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class PlayerFinder {
-    public static boolean playerFinderEnabled = true;
+    public static boolean playerFinderEnabled = false;
     public static float glowHue = 0.333f; // green
     public static float glowSaturation = 1.0f;
     public static float glowLightness = 0.5f;
@@ -43,6 +44,7 @@ public final class PlayerFinder {
     }
 
     public static boolean shouldForceGlow(Entity entity) {
-        return playerFinderEnabled && entity != null && glowingEntityIds.contains(entity.getId());
+        // the remote check matters: a killed finder's tick stops, so its set keeps the last entities
+        return playerFinderEnabled && !FeatureFlags.isKilled("player_finder") && entity != null && glowingEntityIds.contains(entity.getId());
     }
 }

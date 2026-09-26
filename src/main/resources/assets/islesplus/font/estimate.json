@@ -1,4 +1,0 @@
-{ "providers": [
-  { "type": "bitmap", "file": "islesplus:font/estimate.png", "height": 6, "ascent": 3, "chars": ["~"] },
-  { "type": "space", "advances": { "": -1 } }
-] }

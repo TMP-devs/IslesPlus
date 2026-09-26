@@ -55,7 +55,8 @@
 # ---------------------------------------------------------------------------
 /docs                        export-ignore
 /docs/**                     export-ignore
-/CLAUDE.md                   export-ignore
+/announce-worker             export-ignore
+/announce-worker/**          export-ignore
 /scripts                     export-ignore
 /scripts/**                  export-ignore
 

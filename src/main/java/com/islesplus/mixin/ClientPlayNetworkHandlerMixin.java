@@ -13,16 +13,14 @@ import net.minecraft.client.network.ClientPlayNetworkHandler;
 public class ClientPlayNetworkHandlerMixin {
     @Inject(method = "onPlaySound", at = @At("HEAD"), cancellable = true)
     private void islesplus$onPlaySound(PlaySoundS2CPacket packet, CallbackInfo ci) {
-        String soundId = packet.getSound().getIdAsString();
-        if (IslesClient.shouldMuteIncomingSound(soundId)) {
+        if (IslesClient.shouldMuteIncomingSound()) {
             ci.cancel();
         }
     }
 
     @Inject(method = "onPlaySoundFromEntity", at = @At("HEAD"), cancellable = true)
     private void islesplus$onPlaySoundFromEntity(PlaySoundFromEntityS2CPacket packet, CallbackInfo ci) {
-        String soundId = packet.getSound().getIdAsString();
-        if (IslesClient.shouldMuteIncomingSound(soundId)) {
+        if (IslesClient.shouldMuteIncomingSound()) {
             ci.cancel();
         }
     }

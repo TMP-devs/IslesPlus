@@ -56,7 +56,7 @@ public class InfoChip extends Widget {
         String shown = text.get();
         int room = w - 2 * Metrics.CHIP_PAD_X;
         if (Fonts.width(shown, scale) > room) {
-            shown = Fonts.ellipsize(shown, (int) Math.floor(Math.max(0, room) / Fonts.snap(scale)));
+            shown = Fonts.ellipsize(shown, Math.max(0, room), scale);
         }
         Fonts.drawCentered(ctx, shown, x + w / 2, y + (h - textH) / 2, Theme.TEXT_LABEL, scale);
     }

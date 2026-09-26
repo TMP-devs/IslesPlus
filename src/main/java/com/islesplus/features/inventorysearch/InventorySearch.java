@@ -1,5 +1,9 @@
 package com.islesplus.features.inventorysearch;
 
+import com.islesplus.hud.HudAnchor;
+import com.islesplus.hud.HudElement;
+import com.islesplus.hud.HudLayout;
+import com.islesplus.hud.HudPlacement;
 import com.islesplus.sync.FeatureFlags;
 import com.islesplus.ui.Draw;
 import com.islesplus.ui.Fonts;
@@ -17,6 +21,7 @@ import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.input.KeyInput;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.Slot;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * search bar on top of inventories. click it, type, matching items light up.
@@ -27,39 +32,39 @@ import net.minecraft.screen.slot.Slot;
  *   #text - lore / nbt
  */
 public final class InventorySearch {
-    public enum SearchBarPosition {
-        TOP_LEFT, TOP_CENTER, TOP_RIGHT,
-        BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT
-    }
-
     public static boolean inventorySearchEnabled = true;
-    public static SearchBarPosition barPosition = SearchBarPosition.TOP_LEFT;
 
-    private static final int MARGIN = 4;
     static final int BAR_W = 140;
     static final int BAR_H = 16;
     static final int CHEVRON_W = 14;
 
-    private static int barX(int screenW) {
-        return switch (barPosition) {
-            case TOP_LEFT, BOTTOM_LEFT -> MARGIN;
-            case TOP_CENTER, BOTTOM_CENTER -> screenW / 2 - BAR_W / 2;
-            case TOP_RIGHT, BOTTOM_RIGHT -> screenW - BAR_W - MARGIN;
-        };
+    /** The bar and its calculator chevron, placed and scaled with the HUD editor. It lives in
+     * inventory screens, so the HUD pass never draws it; {@link #onRender} does. */
+    public static final HudElement ELEMENT = new HudElement("inventory_search", "Inventory Search",
+        new HudPlacement(HudAnchor.START, HudAnchor.START, 4, 4)) {
+        @Override public boolean enabled() { return inventorySearchEnabled; }
+        @Override public boolean active(MinecraftClient client) { return false; }
+        @Override public boolean inHud() { return false; }
+        @Override public Size measure(boolean preview) { return new Size(BAR_W + CHEVRON_W, BAR_H); }
+        @Override public String editorHint() { return "Shown in inventories"; }
+        @Override public void draw(DrawContext ctx, Frame f) {
+            boolean right = chevronRight(f.x(), HudAnchor.scaled(BAR_W + CHEVRON_W, f.scale()), f.screenW());
+            drawBar(ctx, right, !f.preview() && SearchTextState.focused, f.preview());
+        }
+    };
+
+    /** The chevron goes on the side of the bar that faces the middle of the screen. */
+    private static boolean chevronRight(int boxX, int boxW, int screenW) {
+        return boxX + boxW / 2 < screenW / 2;
     }
 
-    private static int chevronX(int bx) {
-        return switch (barPosition) {
-            case TOP_LEFT, BOTTOM_LEFT -> bx + BAR_W;
-            default -> bx - CHEVRON_W;
-        };
-    }
+    private static int barX(boolean chevronRight) { return chevronRight ? 0 : CHEVRON_W; }
 
-    private static int barY(int screenH) {
-        return switch (barPosition) {
-            case TOP_LEFT, TOP_CENTER, TOP_RIGHT -> MARGIN;
-            case BOTTOM_LEFT, BOTTOM_CENTER, BOTTOM_RIGHT -> screenH - BAR_H - MARGIN;
-        };
+    private static int chevronX(boolean chevronRight) { return chevronRight ? BAR_W : 0; }
+
+    /** The calculator opens over the bar when it would run off the bottom of the screen. */
+    private static boolean calculatorAbove(HudLayout.Box box, int screenH) {
+        return box.y() + (BAR_H + 2 + InventoryCalculator.getPanelHeight()) * box.scale() > screenH;
     }
 
     private InventorySearch() {}
@@ -81,13 +86,16 @@ public final class InventorySearch {
 
     private static boolean onMouseClick(Screen screen, Click click) {
         if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search") || WorldIdentification.world == PlayerWorld.OTHER) return true;
-        double mx = click.x();
-        double my = click.y();
-        int bx = barX(screen.width);
-        int by = barY(screen.height);
+        HudLayout.Box box = HudLayout.place(ELEMENT, screen.width, screen.height, false);
+        boolean right = chevronRight(box.x(), box.w(), screen.width);
+        // Into the bar's own (unscaled) pixels
+        double mx = (click.x() - box.x()) / box.scale();
+        double my = (click.y() - box.y()) / box.scale();
+        int bx = barX(right);
+        int by = 0;
 
         // Chevron toggle
-        int cx = chevronX(bx);
+        int cx = chevronX(right);
         if (mx >= cx && mx <= cx + CHEVRON_W && my >= by && my <= by + BAR_H) {
             InventoryCalculator.toggle();
             SearchTextState.focused = false;
@@ -96,7 +104,7 @@ public final class InventorySearch {
 
         // Calculator panel clicks
         if (InventoryCalculator.open) {
-            if (InventoryCalculator.handleClick(screen, mx, my, bx, by)) {
+            if (InventoryCalculator.handleClick(mx, my, bx, by, calculatorAbove(box, screen.height))) {
                 SearchTextState.focused = false;
                 InventoryCalculator.focused = true;
                 return false;
@@ -107,6 +115,8 @@ public final class InventorySearch {
         SearchTextState.focused = hitBar;
         if (hitBar) {
             InventoryCalculator.focused = false;
+            // right-click in the box clears what was typed (and leaves it focused to type again)
+            if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) SearchTextState.setSearchText("");
             SearchTextState.cursorPos = SearchTextState.searchText.length();
             SearchTextState.selectionStart = -1;
         } else {
@@ -140,17 +150,31 @@ public final class InventorySearch {
     private static void onRender(Screen screen, DrawContext ctx, int mx, int my, float delta) {
         if (!inventorySearchEnabled || FeatureFlags.isKilled("inventory_search")) return;
         if (WorldIdentification.world == PlayerWorld.OTHER) return;
-        MinecraftClient client = MinecraftClient.getInstance();
-        boolean focused = SearchTextState.focused;
+        HudLayout.Box box = HudLayout.place(ELEMENT, screen.width, screen.height, false);
+        boolean right = chevronRight(box.x(), box.w(), screen.width);
+        ctx.getMatrices().pushMatrix();
+        try {
+            ctx.getMatrices().translate((float) box.x(), (float) box.y());
+            ctx.getMatrices().scale(box.scale(), box.scale());
+            drawBar(ctx, right, SearchTextState.focused, false);
+            if (InventoryCalculator.open) {
+                InventoryCalculator.render(ctx, barX(right), 0, calculatorAbove(box, screen.height));
+            }
+        } finally {
+            ctx.getMatrices().popMatrix();
+        }
+    }
 
-        int bx = barX(screen.width);
-        int by = barY(screen.height);
+    /** Chevron + bar at (0, 0). A preview (the HUD editor) shows the empty bar. */
+    private static void drawBar(DrawContext ctx, boolean chevronRight, boolean focused, boolean preview) {
+        MinecraftClient client = MinecraftClient.getInstance();
+        int bx = barX(chevronRight), by = 0;
 
         // Chevron
-        int cx = chevronX(bx);
+        int cx = chevronX(chevronRight);
         Draw.bevel(ctx, cx, by, CHEVRON_W, BAR_H, Theme.OXBLOOD, Theme.OXBLOOD_LIT, Theme.OXBLOOD_SHADE, Theme.INK);
         Draw.caret(ctx, cx + CHEVRON_W / 2, by + BAR_H / 2,
-                InventoryCalculator.open ? Draw.Dir.DOWN : Draw.Dir.RIGHT, Theme.CREAM);
+                !preview && InventoryCalculator.open ? Draw.Dir.DOWN : Draw.Dir.RIGHT, Theme.CREAM);
 
         // Bar
         Draw.bevel(ctx, bx, by, BAR_W, BAR_H, Theme.CALC_NUM, Theme.CALC_NUM_LIT, Theme.CALC_NUM_SHADE,
@@ -158,14 +182,10 @@ public final class InventorySearch {
 
         // Text / placeholder
         int textX = bx + 4, textY = by + 4, maxW = BAR_W - 8;
-        if (SearchTextState.searchText.isEmpty() && !focused) {
+        if (preview || (SearchTextState.searchText.isEmpty() && !focused)) {
             Fonts.draw(ctx, "Search...", textX, textY, Theme.TEXT_META);
         } else {
             renderSearchText(ctx, client, focused, textX, textY, maxW, bx, by);
-        }
-
-        if (InventoryCalculator.open) {
-            InventoryCalculator.render(ctx, bx, by, screen.width, screen.height);
         }
     }
 

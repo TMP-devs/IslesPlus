@@ -1,0 +1,4 @@
+{ "providers": [
+  { "type": "ttf", "file": "islesplus:pixelify_sans_400.ttf", "size": 8.0, "oversample": 2.0, "shift": [0.0, 0.0] },
+  { "type": "reference", "id": "minecraft:default" }
+] }
