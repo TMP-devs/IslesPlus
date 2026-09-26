@@ -3,7 +3,6 @@ package com.islesplus.screen.islesscreen;
 import com.islesplus.IslesClient;
 import com.islesplus.IslesPlusConfig;
 import com.islesplus.features.chatfilter.ChatFilter;
-import com.islesplus.features.chestfinder.ChestFinder;
 import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.foodbuff.FoodBuffTimer;
@@ -16,7 +15,6 @@ import com.islesplus.features.harvesttimer.NerdModeActivator;
 import com.islesplus.features.inventorynotifier.InventoryNotifier;
 import com.islesplus.features.harvestables.HarvestableHighlighter;
 import com.islesplus.features.inventorysearch.InventorySearch;
-import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.nodealertmanager.NodeAlertManager;
 import com.islesplus.features.noderadius.NodeRadiusRenderer;
 import com.islesplus.features.playerfinder.PlayerFinder;
@@ -26,9 +24,7 @@ import com.islesplus.features.qtetracker.QteTracker;
 import com.islesplus.features.rankcalculator.RankCalculator;
 import com.islesplus.features.rollpercent.ItemAge;
 import com.islesplus.features.rollpercent.RollPercent;
-import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.slotlocker.SlotLocker;
-import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
 import com.islesplus.features.waystonefinder.WaystoneFinder;
 import com.islesplus.screen.islesscreen.rows.AutoPartyRow;
 import com.islesplus.screen.islesscreen.rows.BossTimersRow;
@@ -54,8 +50,6 @@ import com.islesplus.ui.widgets.Rule;
 import com.islesplus.ui.widgets.Label;
 import com.islesplus.ui.widgets.SmallToggle;
 import com.islesplus.ui.widgets.ValueSlider;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.screen.Screen;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -94,7 +88,7 @@ final class Rows {
             })
             .beta());
         rows.add(plushieFinder());
-        rows.add(finderRow("Waystone Finder", "Highlight waystones.", "waystone_finder", false,
+        rows.add(finderRow("Waystone Finder", "Highlight waystones.", "waystone_finder",
             () -> WaystoneFinder.waystoneFinderEnabled,
             v -> { WaystoneFinder.waystoneFinderEnabled = v; if (!v) WaystoneFinder.reset(); IslesPlusConfig.save(); },
             () -> WaystoneFinder.glowHue, v -> WaystoneFinder.glowHue = v,
@@ -464,46 +458,18 @@ final class Rows {
 
     static List<FeatureRow> rift(OverlayHost host) {
         List<FeatureRow> rows = new ArrayList<>();
-        // Player Highlight and the Score Calculator are not spoilers (players are players, the score
-        // is on the scoreboard anyway), so no warning popup; the other finders go through riftToggle.
-        rows.add(finderRow("Player Highlight", "Highlight nearby players.", "player_finder", false,
+        rows.add(finderRow("Player Highlight", "Highlight nearby players.", "player_finder",
             () -> PlayerFinder.playerFinderEnabled,
             v -> { PlayerFinder.playerFinderEnabled = v; if (!v) PlayerFinder.reset(); IslesPlusConfig.save(); },
             () -> PlayerFinder.glowHue, v -> PlayerFinder.glowHue = v,
             () -> PlayerFinder.glowSaturation, v -> PlayerFinder.glowSaturation = v,
             () -> PlayerFinder.glowLightness, v -> PlayerFinder.glowLightness = v));
-        rows.add(finderRow("Button Finder", "Highlight buttons.", "button_finder", true,
-            () -> SecretFinder.secretFinderEnabled,
-            v -> { SecretFinder.secretFinderEnabled = v; if (!v) SecretFinder.reset(); IslesPlusConfig.save(); },
-            () -> SecretFinder.glowHue, v -> SecretFinder.glowHue = v,
-            () -> SecretFinder.glowSaturation, v -> SecretFinder.glowSaturation = v,
-            () -> SecretFinder.glowLightness, v -> SecretFinder.glowLightness = v)
-            .note("Shaders may break this feature"));
-        rows.add(finderRow("Chest Finder", "Highlight chests.", "chest_finder", true,
-            () -> ChestFinder.chestFinderEnabled,
-            v -> { ChestFinder.chestFinderEnabled = v; if (!v) ChestFinder.reset(); IslesPlusConfig.save(); },
-            () -> ChestFinder.glowHue, v -> ChestFinder.glowHue = v,
-            () -> ChestFinder.glowSaturation, v -> ChestFinder.glowSaturation = v,
-            () -> ChestFinder.glowLightness, v -> ChestFinder.glowLightness = v));
-        rows.add(finderRow("Vending Machine Finder", "Highlight vending machines.", "vending_machine_finder", true,
-            () -> VendingMachineFinder.vendingMachineFinderEnabled,
-            v -> { VendingMachineFinder.vendingMachineFinderEnabled = v; if (!v) VendingMachineFinder.reset(); IslesPlusConfig.save(); },
-            () -> VendingMachineFinder.glowHue, v -> VendingMachineFinder.glowHue = v,
-            () -> VendingMachineFinder.glowSaturation, v -> VendingMachineFinder.glowSaturation = v,
-            () -> VendingMachineFinder.glowLightness, v -> VendingMachineFinder.glowLightness = v));
-        rows.add(finderRow("Mob Finder", "Highlight nearby mobs.", "mob_finder", true,
-            () -> MobFinder.mobFinderEnabled,
-            v -> { MobFinder.mobFinderEnabled = v; if (!v) MobFinder.reset(); IslesPlusConfig.save(); },
-            () -> MobFinder.glowHue, v -> MobFinder.glowHue = v,
-            () -> MobFinder.glowSaturation, v -> MobFinder.glowSaturation = v,
-            () -> MobFinder.glowLightness, v -> MobFinder.glowLightness = v));
-        rows.add(scoreCalculator());   // last of six = the bottom-right slot
+        rows.add(scoreCalculator());
         return rows;
     }
 
-    /** A finder row with a colour drawer bound to the finder's hue/saturation/lightness fields.
-     * {@code riftWarning}: wrap the toggle in {@link #riftToggle} (first-enable spoiler popup). */
-    private static FeatureRow finderRow(String title, String description, String killKey, boolean riftWarning,
+    /** A finder row with a colour drawer bound to the finder's hue/saturation/lightness fields. */
+    private static FeatureRow finderRow(String title, String description, String killKey,
             BooleanSupplier enabled, Consumer<Boolean> apply,
             Supplier<Float> hue, Consumer<Float> setHue,
             Supplier<Float> sat, Consumer<Float> setSat,
@@ -511,7 +477,7 @@ final class Rows {
         Widget drawer = GlowColorDrawer.of(hue, setHue, sat, setSat, light, setLight);
         return new FeatureRow(title, description)
             .killedKey(killKey)
-            .toggle(enabled, riftWarning ? riftToggle(apply) : apply)
+            .toggle(enabled, apply)
             .drawer(drawer);
     }
 
@@ -579,22 +545,6 @@ final class Rows {
 
     private static int hudOptions() {
         return count(() -> RankCalculator.showPlayerCount, () -> RankCalculator.showRankDropTimer);
-    }
-
-    /**
-     * Wraps a rift toggle callback to show a first-time warning before enabling.
-     * Disabling always works without the warning. (Copied from the old dashboard's card registration logic.)
-     */
-    private static Consumer<Boolean> riftToggle(Consumer<Boolean> apply) {
-        return enabled -> {
-            if (!enabled || RiftWarningManager.isDismissed()) {
-                apply.accept(enabled);
-            } else {
-                MinecraftClient mc = MinecraftClient.getInstance();
-                Screen current = mc.currentScreen;
-                mc.setScreen(new RiftWarningScreen(current, () -> apply.accept(true)));
-            }
-        };
     }
 
     // ==============================

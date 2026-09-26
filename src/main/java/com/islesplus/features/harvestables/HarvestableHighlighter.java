@@ -25,7 +25,7 @@ import java.util.Set;
 
 /**
  * Glows the gatherable things lying around the Isles (fibers, apples, mushrooms, kelp...) through
- * walls, like the chest finder does in rifts. Each one can be switched on or off.
+ * walls. Each one can be switched on or off.
  *
  * <p>Server shape (scans 2026-09-24): a harvestable is an {@code interaction} plus a display at the
  * exact same spot - an {@code item_display} (the item shown: a MythicMobs "type" in its custom data,

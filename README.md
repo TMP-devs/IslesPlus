@@ -8,6 +8,10 @@ Isles+ is a quality-of-life mod for Skyblock Isles built to make routine gamepla
 **Server IP:** `skyblockisles.net` *(not affiliated)*
 
 **Mod created by:** `chrrisk & Scrolls`
+## What's new in 1.0.3
+- **Rift finders removed** - Button, Chest, Grub Machine and Mob Finder are gone for good. Any Isles+ that still has them is not an official version: [check your jar](https://sha256-islesplus.chrrisk.workers.dev/)
+- **Boss Tracker** - spawn timer updated: bosses now take 1 minute to spawn instead of 2
+
 ## What's new in 1.0.2
 - **HUD Editor** - move and resize everything Isles+ puts on your screen (`/ip hud`)
 - **Menu** - search box, new pages (QoL, Inventory, Node Farming, Rift, Keybinds) and new fonts
@@ -55,14 +59,9 @@ Isles+ is a quality-of-life mod for Skyblock Isles built to make routine gamepla
 - **Berry Alert** - title and sound when a berry spawns while you farm
 
 ### 🏚️ Rift
-- **Button Finder** - highlights Rift buttons
-- **Chest Finder** - highlights Rift chests
-- **Grub Machine Finder** - highlights Rift grub machines
-- **Mob Finder** - highlights nearby Rift mobs
 - **Player Highlight** - highlights nearby players in Rifts
 - **Score Calculator** - live rank HUD in Rifts, with Rift Spelunker event support
-- **Rift Warning** - on-screen warning in Rifts
-- **Custom Finder Colours** - set any hex colour and brightness for every finder
+- **Custom Highlight Colour** - set any hex colour and brightness for Player Highlight
 
 ### ⌨️ Keybinds
 - **Keybind Rebinding** - change any keybind right inside `/ip`, including mouse buttons, with conflict warnings

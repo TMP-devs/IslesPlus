@@ -21,10 +21,10 @@ import java.util.Map;
  *
  * one feature in the "features" object of features_v2.json:
  *
- *   "chest_finder": {
+ *   "waystone_finder": {
  *     "disabled": false, "disabled_reason": "",
  *     "killed": false,
- *     "tooltip": "Shaders may break this feature",
+ *     "tooltip": "Shaders may affect the glow",
  *     "versions": {
  *       "1.0.2":          { "killed": true },
  *       ">=1.0.3 <1.0.5": { "disabled": true, "disabled_reason": "Update to 1.0.5" }

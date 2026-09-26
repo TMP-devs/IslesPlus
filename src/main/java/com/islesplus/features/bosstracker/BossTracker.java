@@ -49,8 +49,10 @@ public final class BossTracker {
 
     private static final long COOLDOWN_MS = 7_200_000L;
     private static final long SPAWNED_TIMEOUT_MS = 300_000L; // 5 minutes
-    private static final long SPAWNED_FALLBACK_MS = 7_080_000L; // 1h 58m (2h minus ~2m spawn)
+    private static final long SPAWNING_MS = 60_000L; // "WORLD BOSS EVENT!" to the boss appearing
+    private static final long SPAWNED_FALLBACK_MS = COOLDOWN_MS - SPAWNING_MS; // 1h 59m (2h minus the 1m spawn)
 
+    private static final Pattern ABOUT_TO_SPAWN_PATTERN = Pattern.compile("about to spawn in (\\d+) seconds");
     private static final Pattern READY_PATTERN = Pattern.compile("The (.+?) is ready to be spawned!");
     private static final Pattern SKULL_PATTERN = Pattern.compile("☠\\s+(.+?)\\s+☠");
     private static final Pattern HOURS_PATTERN = Pattern.compile("(\\d+)h");
@@ -176,11 +178,11 @@ public final class BossTracker {
 
         String stripped = msg.strip();
 
-        // "WORLD BOSS EVENT!" → 120s spawning timer
+        // "WORLD BOSS EVENT!" → 60s spawning timer
         if (stripped.contains("WORLD BOSS EVENT!")) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
-                setBossState(name, BossState.SPAWNING, 120_000L);
+                setBossState(name, BossState.SPAWNING, SPAWNING_MS);
             } else {
                 pendingSpawnEvent = true;
                 pendingSpawnEventExpiry = Util.getMeasuringTimeMs() + 2000;
@@ -192,7 +194,7 @@ public final class BossTracker {
         if (pendingSpawnEvent) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
-                setBossState(name, BossState.SPAWNING, 120_000L);
+                setBossState(name, BossState.SPAWNING, SPAWNING_MS);
                 pendingSpawnEvent = false;
             }
             return;
@@ -229,11 +231,12 @@ public final class BossTracker {
             return;
         }
 
-        // "about to spawn in 120 seconds", name is in the same message
-        if (stripped.contains("about to spawn in 120 seconds")) {
+        // "about to spawn in 60 seconds", name is in the same message; the timer uses the seconds it gives
+        Matcher aboutM = ABOUT_TO_SPAWN_PATTERN.matcher(stripped);
+        if (aboutM.find()) {
             String name = extractBossNameFromDecorated(stripped);
             if (name != null) {
-                setBossState(name, BossState.SPAWNING, 120_000L);
+                setBossState(name, BossState.SPAWNING, Long.parseLong(aboutM.group(1)) * 1000L);
             }
             return;
         }

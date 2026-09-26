@@ -24,8 +24,7 @@ import java.util.List;
 /**
  * Waypoints on sunken chests: "◆ Sunken Tortuga Chest · 42m" over each one the client can see,
  * through walls and water, in its rarity's colour ({@link TreasureChest}). "TREASURE", locked and
- * unlabelled chests get none. Isles only - Rift crates are
- * Chest Finder's. A looted chest leaves the world, and its waypoint with it; up close
+ * unlabelled chests get none. Isles only. A looted chest leaves the world, and its waypoint with it; up close
  * ({@link TreasureChest#HIDE_WITHIN}) the tag steps aside.
  */
 public final class TreasureChestFinder {

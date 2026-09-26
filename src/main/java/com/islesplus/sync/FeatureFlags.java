@@ -39,8 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * feature keys:
  *   harvest_timer, node_radius, node_depleted_ping, regen_mode,
- *   drop_notify, inventory_full, vending_machine_finder, chest_finder,
- *   plushie_finder, button_finder, mob_finder, player_finder,
+ *   drop_notify, inventory_full, plushie_finder, player_finder,
  *   rank_calculator, inventory_search, chat_filter, waystone_finder,
  *   qte_tracker (whole thing) plus per type: qte_tracker_luck, qte_tracker_exp,
  *   qte_tracker_chance, qte_tracker_coins, qte_tracker_tickskip,
@@ -92,48 +91,26 @@ public final class FeatureFlags {
 
     private FeatureFlags() {}
 
-    /** local override: when true isKilled() and isHidden() are always false. only honoured while
-     * the companion tools are installed (they set this field; recognised by the hash of their mod
-     * id), so another mod flipping it does nothing. */
-    public static volatile boolean localOverride = false;
-    private static final String COMPANION_ID_SHA256 = "8666a4d9d713007978c67dce20c8db4ebf3d9ab0f55c8ee1384044f6804d0dba";
-    private static final boolean COMPANION_PRESENT = companionPresent();
-
-    private static boolean companionPresent() {
-        try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
-            for (net.fabricmc.loader.api.ModContainer mod : FabricLoader.getInstance().getAllMods()) {
-                byte[] d = md.digest(mod.getMetadata().getId().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                if (java.util.HexFormat.of().formatHex(d).equals(COMPANION_ID_SHA256)) return true;
-            }
-        } catch (java.security.NoSuchAlgorithmException ignored) {}
-        return false;
-    }
-
-    private static boolean bypass() { return localOverride && COMPANION_PRESENT; }
-
     /** true when the feature's code must not run: it is disabled OR killed in the json. (the name
      * predates the json's "killed" field, which is the narrower {@link #isHidden}.) */
     public static boolean isKilled(String key) {
-        return !bypass() && blocked.containsKey(key);
+        return blocked.containsKey(key);
     }
 
     /** true when the feature is "killed" in the json: removed from the UI entirely, no tooltip. */
     public static boolean isHidden(String key) {
-        if (bypass()) return false;
         FeatureState s = blocked.get(key);
         return s != null && s.killed();
     }
 
     /** the "i" badge text for a feature card: the json's tooltip for {@code key} when it sets one,
-     * else {@code builtIn}. null = no badge (json "" or no built-in text). not affected by the
-     * dev bypass. */
+     * else {@code builtIn}. null = no badge (json "" or no built-in text). */
     public static String tooltip(String key, String builtIn) {
         return FeatureState.resolveTooltip(key == null ? null : tooltips.get(key), builtIn);
     }
 
     /** whether a feature (card or option tile) shows its BETA tag: the json's "beta" for {@code key}
-     * when it sets one, else {@code builtIn}. not affected by the local override. */
+     * when it sets one, else {@code builtIn}. */
     public static boolean beta(String key, boolean builtIn) {
         Boolean remote = key == null ? null : betas.get(key);
         return remote != null ? remote : builtIn;

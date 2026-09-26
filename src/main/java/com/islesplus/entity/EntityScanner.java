@@ -31,7 +31,6 @@ public final class EntityScanner {
         List<Entity> areaEffectClouds = new ArrayList<>();
         List<Entity> textDisplaysFar = new ArrayList<>();
         List<Entity> players = new ArrayList<>();
-        List<Entity> slimes = new ArrayList<>();
         List<Entity> armorStands = new ArrayList<>();
         List<Entity> itemEntities = new ArrayList<>();
         List<Entity> blockDisplays = new ArrayList<>();
@@ -57,7 +56,6 @@ public final class EntityScanner {
                 case "entity.minecraft.interaction" -> interactions.add(entity);
                 case "entity.minecraft.item_display" -> itemDisplays.add(entity);
                 case "entity.minecraft.area_effect_cloud" -> areaEffectClouds.add(entity);
-                case "entity.minecraft.slime" -> slimes.add(entity);
                 case "entity.minecraft.armor_stand" -> {
                     if (distSq <= RADIUS_NEAR_SQ) armorStands.add(entity);
                 }
@@ -77,7 +75,6 @@ public final class EntityScanner {
             areaEffectClouds,
             textDisplaysFar,
             players,
-            slimes,
             armorStands,
             itemEntities,
             blockDisplays,

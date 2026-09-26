@@ -19,7 +19,6 @@ import com.islesplus.features.bosstracker.BossTracker;
 import com.islesplus.features.autoparty.AutoParty;
 import com.islesplus.features.grounditemsnotifier.GroundItemsNotifier;
 import com.islesplus.features.inventorysearch.InventorySearch;
-import com.islesplus.features.chestfinder.ChestFinder;
 import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.foodbuff.FoodBuffTimer;
 import com.islesplus.features.voidrift.VoidRiftTimer;
@@ -28,7 +27,6 @@ import com.islesplus.features.storagecount.StorageCount;
 import com.islesplus.features.treasurechest.TreasureChestFinder;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.inventorynotifier.InventoryNotifier;
-import com.islesplus.features.mobfinder.MobFinder;
 import com.islesplus.features.nodealertmanager.NodeAlertManager;
 import com.islesplus.features.noderadius.NodeRadiusRenderer;
 import com.islesplus.features.harvesttimer.HarvestTimer;
@@ -39,9 +37,7 @@ import com.islesplus.features.playerfinder.PlayerFinder;
 import com.islesplus.features.rankcalculator.RankCalculator;
 import com.islesplus.features.qtetracker.QteTracker;
 import com.islesplus.features.quickactions.QuickActions;
-import com.islesplus.features.secretfinder.SecretFinder;
 import com.islesplus.features.slotlocker.SlotLocker;
-import com.islesplus.features.vendingmachinefinder.VendingMachineFinder;
 import com.islesplus.features.waystonefinder.WaystoneFinder;
 import com.islesplus.logging.IslesLog;
 import com.islesplus.sound.SoundController;
@@ -63,11 +59,14 @@ public final class IslesPlusConfig {
     private static final Path LEGACY_PATH =
         FabricLoader.getInstance().getConfigDir().resolve("islesplus-slot-locks.json");
 
-    public static int maxMatches = 500;
+    /** files of features that were removed in 1.0.3 (the Rift spoiler popup), deleted on load */
+    private static final Path[] REMOVED_FEATURE_FILES = {CONFIG_DIR.resolve("rift_warning.json")};
+
 
     private IslesPlusConfig() {}
 
     public static void load() {
+        deleteRemovedFeatureFiles();
         JsonObject obj = readJson(CONFIG_PATH);
         if (obj == null) {
             obj = tryMigrateMain();
@@ -130,26 +129,10 @@ public final class IslesPlusConfig {
                 catch (RuntimeException ignored) {}
             }
         }
-        ChestFinder.chestFinderEnabled              = getBool(obj,  "chestFinderEnabled",              false);
-        ChestFinder.glowHue                         = getFloat(obj, "chestFinderGlowHue",             0.128f);
-        ChestFinder.glowSaturation                  = getFloat(obj, "chestFinderGlowSaturation",      1.0f);
-        ChestFinder.glowLightness                   = getFloat(obj, "chestFinderGlowLightness",       0.5f);
-        MobFinder.mobFinderEnabled                  = getBool(obj,  "mobFinderEnabled",                false);
-        MobFinder.glowHue                           = getFloat(obj, "mobFinderGlowHue",               0.617f);
-        MobFinder.glowSaturation                    = getFloat(obj, "mobFinderGlowSaturation",        1.0f);
-        MobFinder.glowLightness                     = getFloat(obj, "mobFinderGlowLightness",         0.5f);
         PlayerFinder.playerFinderEnabled            = getBool(obj,  "playerFinderEnabled",             false);
         PlayerFinder.glowHue                        = getFloat(obj, "playerFinderGlowHue",            0.333f);
         PlayerFinder.glowSaturation                 = getFloat(obj, "playerFinderGlowSaturation",     1.0f);
         PlayerFinder.glowLightness                  = getFloat(obj, "playerFinderGlowLightness",      0.5f);
-        SecretFinder.secretFinderEnabled            = getBool(obj,  "secretFinderEnabled",             false);
-        SecretFinder.glowHue                        = getFloat(obj, "secretFinderGlowHue",            0.917f);
-        SecretFinder.glowSaturation                 = getFloat(obj, "secretFinderGlowSaturation",     1.0f);
-        SecretFinder.glowLightness                  = getFloat(obj, "secretFinderGlowLightness",      0.5f);
-        VendingMachineFinder.vendingMachineFinderEnabled = getBool(obj, "vendingMachineFinderEnabled", false);
-        VendingMachineFinder.glowHue                = getFloat(obj, "vendingMachineFinderGlowHue",    0.092f);
-        VendingMachineFinder.glowSaturation         = getFloat(obj, "vendingMachineFinderGlowSaturation", 1.0f);
-        VendingMachineFinder.glowLightness          = getFloat(obj, "vendingMachineFinderGlowLightness",  0.5f);
         WaystoneFinder.waystoneFinderEnabled        = getBool(obj,  "waystoneFinderEnabled",          true);
         WaystoneFinder.glowHue                      = getFloat(obj, "waystoneFinderGlowHue",          0.13f);
         WaystoneFinder.glowSaturation               = getFloat(obj, "waystoneFinderGlowSaturation",   1.0f);
@@ -239,7 +222,6 @@ public final class IslesPlusConfig {
         ChatFilter.filterGuildChat                 = getBool(obj,  "filterGuildChat",                  false);
         ChatFilter.filterDeaths                    = getBool(obj,  "filterDeaths",                     true);
         InventorySearch.inventorySearchEnabled      = getBool(obj,  "inventorySearchEnabled",           true);
-        maxMatches                                  = getInt(obj,   "maxMatches",                       500);
 
         NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.OFF;
         if (obj.has("regenPingMode")) {
@@ -275,6 +257,16 @@ public final class IslesPlusConfig {
             Files.writeString(target, content);
         } finally {
             Files.deleteIfExists(tmp);
+        }
+    }
+
+    private static void deleteRemovedFeatureFiles() {
+        for (Path p : REMOVED_FEATURE_FILES) {
+            try {
+                Files.deleteIfExists(p);
+            } catch (IOException e) {
+                IslesLog.runtimeWarn("[Isles+] Failed to delete " + p, e);
+            }
         }
     }
 
@@ -320,26 +312,10 @@ public final class IslesPlusConfig {
         JsonArray harvestHiddenArr = new JsonArray();
         for (HarvestableHighlighter.Harvestable h : HarvestableHighlighter.hidden) harvestHiddenArr.add(h.name());
         obj.add("harvestableHidden",                     harvestHiddenArr);
-        obj.addProperty("chestFinderEnabled",            ChestFinder.chestFinderEnabled);
-        obj.addProperty("chestFinderGlowHue",            ChestFinder.glowHue);
-        obj.addProperty("chestFinderGlowSaturation",     ChestFinder.glowSaturation);
-        obj.addProperty("chestFinderGlowLightness",      ChestFinder.glowLightness);
-        obj.addProperty("mobFinderEnabled",              MobFinder.mobFinderEnabled);
-        obj.addProperty("mobFinderGlowHue",              MobFinder.glowHue);
-        obj.addProperty("mobFinderGlowSaturation",       MobFinder.glowSaturation);
-        obj.addProperty("mobFinderGlowLightness",        MobFinder.glowLightness);
         obj.addProperty("playerFinderEnabled",           PlayerFinder.playerFinderEnabled);
         obj.addProperty("playerFinderGlowHue",           PlayerFinder.glowHue);
         obj.addProperty("playerFinderGlowSaturation",    PlayerFinder.glowSaturation);
         obj.addProperty("playerFinderGlowLightness",     PlayerFinder.glowLightness);
-        obj.addProperty("secretFinderEnabled",           SecretFinder.secretFinderEnabled);
-        obj.addProperty("secretFinderGlowHue",           SecretFinder.glowHue);
-        obj.addProperty("secretFinderGlowSaturation",    SecretFinder.glowSaturation);
-        obj.addProperty("secretFinderGlowLightness",     SecretFinder.glowLightness);
-        obj.addProperty("vendingMachineFinderEnabled",   VendingMachineFinder.vendingMachineFinderEnabled);
-        obj.addProperty("vendingMachineFinderGlowHue",   VendingMachineFinder.glowHue);
-        obj.addProperty("vendingMachineFinderGlowSaturation", VendingMachineFinder.glowSaturation);
-        obj.addProperty("vendingMachineFinderGlowLightness",  VendingMachineFinder.glowLightness);
         obj.addProperty("waystoneFinderEnabled",         WaystoneFinder.waystoneFinderEnabled);
         obj.addProperty("waystoneFinderGlowHue",         WaystoneFinder.glowHue);
         obj.addProperty("waystoneFinderGlowSaturation",  WaystoneFinder.glowSaturation);
@@ -398,7 +374,6 @@ public final class IslesPlusConfig {
         obj.addProperty("filterGuildChat",               ChatFilter.filterGuildChat);
         obj.addProperty("filterDeaths",                  ChatFilter.filterDeaths);
         obj.addProperty("inventorySearchEnabled",        InventorySearch.inventorySearchEnabled);
-        obj.addProperty("maxMatches",                    maxMatches);
         obj.add("lockedSlots",                           SlotLocker.getLockedSlotsJson());
         obj.addProperty("quickActionsEnabled",           QuickActions.enabled);
         obj.addProperty("quickActionsBackground",        QuickActions.showBackground);
