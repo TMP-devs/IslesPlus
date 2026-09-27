@@ -33,6 +33,7 @@ import com.islesplus.features.plushiefinder.PlushieRepository;
 import com.islesplus.features.plushiefinder.PlushieWaypointRenderer;
 import com.islesplus.features.bosstracker.BossaryHook;
 import com.islesplus.features.autoparty.AutoParty;
+import com.islesplus.features.chatchannel.ChatChannelButtons;
 import com.islesplus.features.rollpercent.ItemAge;
 import com.islesplus.features.rollpercent.RollPercent;
 import com.islesplus.features.bosstracker.BossTracker;
@@ -250,6 +251,7 @@ public class IslesClient implements ClientModInitializer {
 
         PlushieMenuHook.register();
         com.islesplus.screen.TitleMenuRestyle.register();
+        ChatChannelButtons.register();
 
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             String text = message.getString();

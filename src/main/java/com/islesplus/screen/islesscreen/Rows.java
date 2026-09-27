@@ -3,6 +3,7 @@ package com.islesplus.screen.islesscreen;
 import com.islesplus.IslesClient;
 import com.islesplus.IslesPlusConfig;
 import com.islesplus.features.chatfilter.ChatFilter;
+import com.islesplus.features.chatchannel.ChatChannels;
 import com.islesplus.features.berryalert.BerryAlert;
 import com.islesplus.features.dropnotifier.DropNotifier;
 import com.islesplus.features.foodbuff.FoodBuffTimer;
@@ -108,6 +109,10 @@ final class Rows {
         rows.add(BossTimersRow.build(host));
         rows.add(AutoPartyRow.build(host));
         rows.add(chatFilters());
+        rows.add(new FeatureRow("Chat Channels", "Switch chat modes with buttons above the chat input.")
+            .killedKey(ChatChannels.KILL_KEY)
+            .toggle(() -> ChatChannels.chatChannelsEnabled,
+                v -> { ChatChannels.chatChannelsEnabled = v; IslesPlusConfig.save(); }));
         return rows;
     }
 

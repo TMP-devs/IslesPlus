@@ -6,6 +6,8 @@
 	"client": [
 		"BossBarHudAccessor",
 		"ChatHudMixin",
+		"ChatScreenAccessor",
+		"ChatScreenMixin",
 		"ClickableWidgetAccessor",
 		"ClientPlayNetworkHandlerMixin",
 		"ConfirmScreenMixin",

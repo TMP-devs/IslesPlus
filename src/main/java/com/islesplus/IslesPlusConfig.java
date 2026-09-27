@@ -12,6 +12,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.islesplus.features.chatfilter.ChatFilter;
+import com.islesplus.features.chatchannel.ChatChannel;
+import com.islesplus.features.chatchannel.ChatChannels;
 import com.islesplus.sync.Announcements;
 import com.islesplus.sound.SoundConfig;
 
@@ -221,6 +223,8 @@ public final class IslesPlusConfig {
         ChatFilter.filterManaMeteor                = getBool(obj,  "filterManaMeteor",                false);
         ChatFilter.filterGuildChat                 = getBool(obj,  "filterGuildChat",                  false);
         ChatFilter.filterDeaths                    = getBool(obj,  "filterDeaths",                     true);
+        ChatChannels.chatChannelsEnabled          = getBool(obj,  "chatChannelsEnabled",              true);
+        ChatChannels.selectedChannel              = ChatChannel.fromStoredName(getString(obj, "chatChannel", "ALL"));
         InventorySearch.inventorySearchEnabled      = getBool(obj,  "inventorySearchEnabled",           true);
 
         NodeAlertManager.regenPingMode = NodeAlertManager.RegenPingMode.OFF;
@@ -373,6 +377,8 @@ public final class IslesPlusConfig {
         obj.addProperty("filterManaMeteor",              ChatFilter.filterManaMeteor);
         obj.addProperty("filterGuildChat",               ChatFilter.filterGuildChat);
         obj.addProperty("filterDeaths",                  ChatFilter.filterDeaths);
+        obj.addProperty("chatChannelsEnabled",            ChatChannels.chatChannelsEnabled);
+        obj.addProperty("chatChannel",                    ChatChannels.selectedChannel.name());
         obj.addProperty("inventorySearchEnabled",        InventorySearch.inventorySearchEnabled);
         obj.add("lockedSlots",                           SlotLocker.getLockedSlotsJson());
         obj.addProperty("quickActionsEnabled",           QuickActions.enabled);
